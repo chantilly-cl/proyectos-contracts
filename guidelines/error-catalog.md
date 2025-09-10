@@ -11,4 +11,3 @@
 | 422    | Unprocessable Entity          | Items inconsistentes con PriceAgreement vigente           | Semántico                              |
 | 500    | Internal Server Error         | Error inesperado                                          |                                        |
 | 503    | Service Unavailable           | Dependencia de pricing no disponible                      | retry-after (si aplica)                |
-|-------:|-------------------------------|-----------------------------------------------------------|----------------------------------------|
