@@ -1,0 +1,21 @@
+{
+  "name": "proyectos-contracts",
+  "private": true,
+  "devDependencies": {
+    "@apidevtools/swagger-cli": "^4.0.4",
+    "@redocly/cli": "^1.16.0",
+    "@stoplight/prism-cli": "^5.10.3",
+    "openapi-typescript": "^7.5.0",
+    "openapi-format": "^1.25.0",
+    "openapi-to-postmanv2": "^4.21.0"
+  },
+  "scripts": {
+    "fmt": "openapi-format openapi/proyectos_workflow.v1.yaml -o openapi/proyectos_workflow.v1.yaml",
+    "lint": "redocly lint openapi/proyectos_workflow.v1.yaml && swagger-cli validate openapi/proyectos_workflow.v1.yaml",
+    "mock": "prism mock openapi/proyectos_workflow.v1.yaml",
+    "types:spa": "openapi-typescript openapi/proyectos_workflow.v1.yaml -o dist/types-spa.d.ts",
+    "postman:export": "openapi2postmanv2 -s openapi/proyectos_workflow.v1.yaml -o dist/postman_collection.json -p",
+    "docs:build": "redocly build-docs openapi/proyectos_workflow.v1.yaml -o dist/index.html",
+    "build": "npm run fmt && npm run lint && npm run types:spa && npm run postman:export && npm run docs:build"
+  }
+}
