@@ -17,7 +17,7 @@
     "fmt": "openapi-format openapi/proyectos_workflow.v1.yaml -o openapi/proyectos_workflow.v1.yaml",
     "lint": "redocly lint",
     "mock": "prism mock openapi/proyectos_workflow.v1.yaml",
-    "types:spa": "openapi-typescript openapi/proyectos_workflow.v1.yaml -o dist/types-spa.d.ts",
+    "types:spa": "shx mkdir -p dist && openapi-typescript",
     "postman:export": "openapi2postmanv2 -s openapi/proyectos_workflow.v1.yaml -o dist/postman_collection.json -p",
     "postman:env": "shx mkdir -p dist && shx cp postman/environment.local_mock.json dist/postman_environment.local_mock.json",
     "docs:build": "redocly build-docs openapi/proyectos_workflow.v1.yaml -o dist/index.html",

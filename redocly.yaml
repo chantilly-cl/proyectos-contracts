@@ -1,10 +1,13 @@
 apis:
   main:
     root: openapi/proyectos_workflow.v1.yaml
-lint:
-  extends:
-    - recommended
-  rules:
-    operation-4xx-response: error
-    info-license: warn
-    tag-description: warn
+    x-openapi-ts:
+      output: dist/types-spa.d.ts   # <- aquí le dices a openapi-typescript dónde escribir
+
+extends:
+  - recommended
+
+rules:
+  operation-4xx-response: error
+  info-license: warn
+  tag-description: warn
