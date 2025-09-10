@@ -1,0 +1,7 @@
+{
+  "name": "Proyectos Workflow (Dev)",
+  "values": [
+    { "key": "baseUrl", "value": "https://dev.api.tu-dominio", "type": "text", "enabled": true },
+    { "key": "bearerToken", "value": "PON_AQUI_EL_TOKEN_EN_TU_COPIA_LOCAL", "type": "text", "enabled": true }
+  ]
+}

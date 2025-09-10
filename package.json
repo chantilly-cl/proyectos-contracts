@@ -1,6 +1,7 @@
 {
   "name": "proyectos-contracts",
   "private": true,
+  "engines": { "node": ">=20" },
   "devDependencies": {
     "@apidevtools/swagger-cli": "^4.0.4",
     "@redocly/cli": "^1.16.0",

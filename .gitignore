@@ -1,0 +1,11 @@
+node_modules/
+# build output
+dist/
+
+# Postman env reales (dejamos versionados solo los .example)
+postman/environment.*.json
+!postman/environment.*.json.example
+# Permitimos el local_mock porque no trae secretos
+!postman/environment.local_mock.json
+
+.DS_Store

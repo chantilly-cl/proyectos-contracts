@@ -25,3 +25,13 @@ Reglas comerciales: **PriceList LOCK** al crear proyecto; **FREEZE** de precios 
 - Rama `v1` para cambios retro-compatibles (`v1.x`).
 - Cambios breaking → `v2`.
 
+## Uso rápido
+```bash
+# 1) Instalar toolchain
+npm ci
+
+# 2) Lint + build (tipos TS, colección Postman y docs)
+npm run build
+
+# 3) Mock local de la API (Prism)
+npm run mock   # expone http://localhost:4010
