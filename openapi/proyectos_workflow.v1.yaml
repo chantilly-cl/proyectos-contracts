@@ -2,29 +2,41 @@ openapi: 3.1.0
 info:
   title: Proyectos Workflow API
   version: 1.0.0-alpha
+  license:
+    name: Proprietary – All rights reserved
+    url: https://tu-dominio/legal
   description: >
     Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT.
     Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
 servers:
-  - url: https://api.example.com
+  - url: https://api.chantillyapps.cl
     description: Producción
-  - url: http://localhost:4010
+  - url: http://api-dev.chantillyapps.cl
     description: Mock local (Prism)
 security:
   - bearerAuth: []
 tags:
   - name: Catalog
+    description: Endpoints de catálogo de productos (SKU, descripción, UoM) para cotizar.
   - name: PriceLists
+    description: Gestión y consulta de listas de precio y su vigencia.
   - name: Projects
+    description: Alta y consulta de proyectos con PriceList bloqueado (LOCK) y estado actual.
   - name: Quotes
+    description: Creación y lectura de cotizaciones y sus versiones.
   - name: Approvals
+    description: Flujo de aprobaciones comercial y financiera (2C + 1F) sobre cotizaciones.
   - name: Workflow
+    description: Transiciones y guardias del workflow del proyecto.
   - name: SalesNotes
+    description: Emisión y consulta de Notas de Venta (NV) derivadas de proyectos aprobados.
   - name: WorkOrders
+    description: Emisión y consulta de Órdenes de Trabajo (OT) posteriores a NV.
 
 paths:
   /v1/catalog/products:
     get:
+      operationId: Catalog_ListProducts
       tags: [Catalog]
       summary: Listar productos
       parameters:
@@ -40,10 +52,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PagedProducts' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/price-lists:
     get:
+      operationId: PriceLists_List
       tags: [PriceLists]
       summary: Listar listas de precio
       parameters:
@@ -55,10 +69,12 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PagedPriceLists' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/projects:
     post:
+      operationId: Projects_Create
       tags: [Projects]
       summary: Crear proyecto (LOCK PriceList)
       description: Crea el proyecto con PriceList asignado y bloqueado.
@@ -75,6 +91,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '409':
           description: Conflicto (violación de regla de negocio)
           content:
@@ -84,6 +102,7 @@ paths:
 
   /v1/projects/{projectId}:
     get:
+      operationId: Projects_Get
       tags: [Projects]
       summary: Obtener proyecto
       parameters:
@@ -99,6 +118,7 @@ paths:
 
   /v1/projects/{projectId}/price-agreement:
     get:
+      operationId: Projects_GetPriceAgreement
       tags: [Projects]
       summary: Ver acuerdo de precios FREEZE
       parameters:
@@ -114,6 +134,7 @@ paths:
 
   /v1/quotes:
     post:
+      operationId: Quotes_Create
       tags: [Quotes]
       summary: Crear cotización (versión 1)
       parameters:
@@ -129,10 +150,14 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Quote' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/quotes/{quoteId}:
     get:
+      operationId: Quotes_Get
       tags: [Quotes]
       summary: Obtener cotización
       parameters:
@@ -143,11 +168,15 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Quote' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }  # p.ej., ya enviado/estado inválido
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/quotes/{quoteId}/submit:
     post:
+      operationId: Quotes_Submit
       tags: [Quotes]
       summary: Enviar a aprobación (genera versión)
       parameters:
@@ -159,10 +188,14 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Quote' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/approvals/{approvalId}/decision:
     post:
+      operationId: Approvals_Decide
       tags: [Approvals]
       summary: Aprobar/Rechazar paso (C1, C2, F1)
       parameters:
@@ -182,10 +215,16 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Approval' }
+        '400': { $ref: '#/components/responses/BadRequest' }      # payload inválido
+        '401': { $ref: '#/components/responses/Unauthorized' }    # no autenticado
+        '403': { $ref: '#/components/responses/Forbidden' }       # sin rol C1/C2/F1
+        '409': { $ref: '#/components/responses/Conflict' }        # decisión duplicada, estado no permite
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/projects/{projectId}/workflow/transition:
     post:
+      operationId: Workflow_Transition
       tags: [Workflow]
       summary: Hacer transición de estado (con guardias)
       parameters:
@@ -202,6 +241,8 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Project' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
         '409':
           description: Guard failed
           content:
@@ -211,6 +252,7 @@ paths:
 
   /v1/projects/{projectId}/sales-notes:
     post:
+      operationId: SalesNotes_Create
       tags: [SalesNotes]
       summary: Emitir Nota de Venta (NV)
       parameters:
@@ -222,10 +264,14 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SalesNote' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }  # approvals incompletos, estado inválido
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
   /v1/projects/{projectId}/work-orders:
     post:
+      operationId: WorkOrders_Create
       tags: [WorkOrders]
       summary: Emitir Orden de Trabajo (OT)
       parameters:
@@ -237,6 +283,9 @@ paths:
           content:
             application/json:
               schema: { $ref: '#/components/schemas/WorkOrder' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }  # requiere NV previa, etc.
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
         default: { $ref: '#/components/responses/Problem' }
 
 components:
@@ -264,6 +313,31 @@ components:
           schema: { $ref: '#/components/schemas/ProblemDetails' }
     NotFound:
       description: No encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Forbidden:
+      description: Prohibido (RBAC)
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    Conflict:
+      description: Conflicto / Regla de negocio
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    UnprocessableEntity:
+      description: Error semántico
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ProblemDetails' }
@@ -309,7 +383,7 @@ components:
         name: { type: string }
         currency: { type: string }
         validFrom: { type: string, format: date }
-        validTo: { type: string, format: date, nullable: true }
+        validTo: { type: [string, 'null'], format: date }
       required: [id, name, currency, validFrom]
     PagedPriceLists:
       type: object
@@ -386,14 +460,14 @@ components:
         quoteId: { type: string, format: uuid }
         step: { type: string, enum: [commercial_1, commercial_2, financial_1] }
         status: { type: string, enum: [pending, approved, rejected] }
-        decidedBy: { type: string, format: uuid, nullable: true }
-        decidedAt: { type: string, format: date-time, nullable: true }
-        comments: { type: string, nullable: true }
+        decidedBy: { type: [string, 'null'], format: uuid }
+        decidedAt: { type: [string, 'null'], format: date-time }
+        comments: { type: [string, 'null'] }
     ApprovalDecision:
       type: object
       properties:
         decision: { type: string, enum: [approve, reject] }
-        comments: { type: string, nullable: true }
+        comments: { type: [string, 'null'] }
       required: [decision]
 
     WorkflowState:
@@ -405,7 +479,7 @@ components:
       type: object
       properties:
         to: { $ref: '#/components/schemas/WorkflowState' }
-        reason: { type: string, nullable: true }
+        reason: { type: [string, 'null'] }
       required: [to]
 
     PriceAgreement:
