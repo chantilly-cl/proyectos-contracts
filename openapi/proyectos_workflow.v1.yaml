@@ -4,20 +4,834 @@ info:
   version: 1.0.0-alpha
   license:
     name: Proprietary – All rights reserved
-    url: https://tu-dominio/legal
-  description: >
-    Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT.
-    Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
+    url: 'https://tu-dominio/legal'
+  description: |
+    Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
 servers:
-  - url: https://api.chantillyapps.cl
+  - url: 'https://api.chantillyapps.cl'
     description: Producción
-  - url: http://api-dev.chantillyapps.cl
+  - url: 'http://api-dev.chantillyapps.cl'
     description: Mock local (Prism)
-security:
-  - bearerAuth: []
+paths:
+  /v1/catalog/products:
+    get:
+      operationId: Catalog_ListProducts
+      summary: Listar productos
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - name: q
+          in: query
+          description: Búsqueda por código o descripción
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProducts'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Catalog
+  /v1/price-lists:
+    get:
+      operationId: PriceLists_List
+      summary: Listar listas de precio
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedPriceLists'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - PriceLists
+  /v1/projects:
+    post:
+      operationId: Projects_Create
+      summary: Crear proyecto (LOCK PriceList)
+      description: Crea el proyecto con PriceList asignado y bloqueado.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreateRequest'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Conflicto (violación de regla de negocio)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
+  '/v1/projects/{projectId}':
+    get:
+      operationId: Projects_Get
+      summary: Obtener proyecto
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
+  '/v1/projects/{projectId}/price-agreement':
+    get:
+      operationId: Projects_GetPriceAgreement
+      summary: Ver acuerdo de precios FREEZE
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceAgreement'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
+  /v1/quotes:
+    post:
+      operationId: Quotes_Create
+      summary: Crear cotización (versión 1)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteCreateRequest'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Quotes
+  '/v1/quotes/{quoteId}':
+    get:
+      operationId: Quotes_Get
+      summary: Obtener cotización
+      parameters:
+        - $ref: '#/components/parameters/QuoteId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Quotes
+  '/v1/quotes/{quoteId}/submit':
+    post:
+      operationId: Quotes_Submit
+      summary: Enviar a aprobación (genera versión)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/QuoteId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '202':
+          description: Enviado a approvals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Quotes
+  '/v1/approvals/{approvalId}/decision':
+    post:
+      operationId: Approvals_Decide
+      summary: 'Aprobar/Rechazar paso (C1, C2, F1)'
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Approvals
+  '/v1/projects/{projectId}/workflow/transition':
+    post:
+      operationId: Workflow_Transition
+      summary: Hacer transición de estado (con guardias)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTransitionRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Guard failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Workflow
+  '/v1/projects/{projectId}/sales-notes':
+    post:
+      operationId: SalesNotes_Create
+      summary: Emitir Nota de Venta (NV)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesNote'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - SalesNotes
+  '/v1/projects/{projectId}/work-orders':
+    post:
+      operationId: WorkOrders_Create
+      summary: Emitir Orden de Trabajo (OT)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrder'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - WorkOrders
+components:
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        maxLength: 64
+      description: Clave idempotente por operación de escritura.
+    Page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        default: 1
+        minimum: 1
+    PageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        default: 50
+        maximum: 200
+        minimum: 1
+    ProjectId:
+      name: projectId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    QuoteId:
+      name: quoteId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    XCorrelationId:
+      name: X-Correlation-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+      description: ID de correlación devuelto/encadenado por los servicios.
+    XRequestId:
+      name: X-Request-Id
+      in: header
+      required: false
+      schema:
+        type: string
+        maxLength: 64
+      description: ID generado por el cliente para trazar la petición extremo a extremo.
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              type: string
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+      required:
+        - title
+        - status
+    Money:
+      type: object
+      properties:
+        currency:
+          type: string
+          example: CLP
+        amount:
+          description: Monto en enteros (céntimos o pesos)
+          type: integer
+      required:
+        - currency
+        - amount
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sku:
+          type: string
+        name:
+          type: string
+        uom:
+          type: string
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+      required:
+        - id
+        - sku
+        - name
+    PagedProducts:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Product'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    PriceList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        currency:
+          type: string
+        validFrom:
+          type: string
+          format: date
+        validTo:
+          type:
+            - string
+            - 'null'
+          format: date
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+      required:
+        - id
+        - name
+        - currency
+        - validFrom
+    PagedPriceLists:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PriceList'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+    ProjectCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        priceListId:
+          description: Se bloquea al crear (LOCK)
+          type: string
+          format: uuid
+      required:
+        - name
+        - clientId
+        - priceListId
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        code:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        workflowState:
+          $ref: '#/components/schemas/WorkflowState'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+      required:
+        - id
+        - name
+        - clientId
+        - priceListId
+        - workflowState
+    QuoteItemInput:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+          format: double
+        unitPrice:
+          $ref: '#/components/schemas/Money'
+        discountPct:
+          type: number
+          format: double
+          default: 0
+          maximum: 100
+          minimum: 0
+      required:
+        - productId
+        - quantity
+    QuoteCreateRequest:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteItemInput'
+        notes:
+          type: string
+      required:
+        - projectId
+        - items
+    QuoteItem:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        quantity:
+          type: number
+        unitPrice:
+          $ref: '#/components/schemas/Money'
+        discountPct:
+          type: number
+        lineTotal:
+          $ref: '#/components/schemas/Money'
+    Quote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        status:
+          type: string
+          enum:
+            - draft
+            - submitted
+            - approved
+            - rejected
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteItem'
+        subtotal:
+          $ref: '#/components/schemas/Money'
+        taxes:
+          $ref: '#/components/schemas/Money'
+        total:
+          $ref: '#/components/schemas/Money'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+    Approval:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+          format: uuid
+        step:
+          type: string
+          enum:
+            - commercial_1
+            - commercial_2
+            - financial_1
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+        decidedBy:
+          type:
+            - string
+            - 'null'
+          format: uuid
+        decidedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        comments:
+          type:
+            - string
+            - 'null'
+      example:
+        type: 'https://errors.tu-dominio/business-rule'
+        title: Business Rule Violation
+        status: 409
+        detail: price_list_id es inmutable para el proyecto
+        instance: /v1/projects/7f3e…
+    ApprovalDecision:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - approve
+            - reject
+        comments:
+          type:
+            - string
+            - 'null'
+      required:
+        - decision
+    WorkflowState:
+      type: string
+      enum:
+        - draft
+        - quoted
+        - approval_pending
+        - approved
+        - sales_note_issued
+        - work_order_issued
+        - manufacturing
+        - delivered
+        - installed
+        - closed
+    WorkflowTransitionRequest:
+      type: object
+      properties:
+        to:
+          $ref: '#/components/schemas/WorkflowState'
+        reason:
+          type:
+            - string
+            - 'null'
+      required:
+        - to
+    PriceAgreement:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+          format: uuid
+        effectiveAt:
+          type: string
+          format: date-time
+    SalesNote:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        number:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+        total:
+          $ref: '#/components/schemas/Money'
+    WorkOrder:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        number:
+          type: string
+        issuedAt:
+          type: string
+          format: date-time
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    BadRequest:
+      description: Solicitud inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Forbidden:
+      description: Prohibido (RBAC)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict:
+      description: Conflicto / Regla de negocio
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnprocessableEntity:
+      description: Error semántico
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
 tags:
   - name: Catalog
-    description: Endpoints de catálogo de productos (SKU, descripción, UoM) para cotizar.
+    description: 'Endpoints de catálogo de productos (SKU, descripción, UoM) para cotizar.'
   - name: PriceLists
     description: Gestión y consulta de listas de precio y su vigencia.
   - name: Projects
@@ -32,477 +846,5 @@ tags:
     description: Emisión y consulta de Notas de Venta (NV) derivadas de proyectos aprobados.
   - name: WorkOrders
     description: Emisión y consulta de Órdenes de Trabajo (OT) posteriores a NV.
-
-paths:
-  /v1/catalog/products:
-    get:
-      operationId: Catalog_ListProducts
-      tags: [Catalog]
-      summary: Listar productos
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-        - in: query
-          name: q
-          schema: { type: string }
-          description: Búsqueda por código o descripción
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PagedProducts' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/price-lists:
-    get:
-      operationId: PriceLists_List
-      tags: [PriceLists]
-      summary: Listar listas de precio
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PagedPriceLists' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects:
-    post:
-      operationId: Projects_Create
-      tags: [Projects]
-      summary: Crear proyecto (LOCK PriceList)
-      description: Crea el proyecto con PriceList asignado y bloqueado.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ProjectCreateRequest' }
-      responses:
-        '201':
-          description: Creado
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Project' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409':
-          description: Conflicto (violación de regla de negocio)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ProblemDetails' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects/{projectId}:
-    get:
-      operationId: Projects_Get
-      tags: [Projects]
-      summary: Obtener proyecto
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Project' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects/{projectId}/price-agreement:
-    get:
-      operationId: Projects_GetPriceAgreement
-      tags: [Projects]
-      summary: Ver acuerdo de precios FREEZE
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PriceAgreement' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/quotes:
-    post:
-      operationId: Quotes_Create
-      tags: [Quotes]
-      summary: Crear cotización (versión 1)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/QuoteCreateRequest' }
-      responses:
-        '201':
-          description: Creado
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Quote' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/quotes/{quoteId}:
-    get:
-      operationId: Quotes_Get
-      tags: [Quotes]
-      summary: Obtener cotización
-      parameters:
-        - $ref: '#/components/parameters/QuoteId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Quote' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }  # p.ej., ya enviado/estado inválido
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/quotes/{quoteId}/submit:
-    post:
-      operationId: Quotes_Submit
-      tags: [Quotes]
-      summary: Enviar a aprobación (genera versión)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/QuoteId'
-      responses:
-        '202':
-          description: Enviado a approvals
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Quote' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/approvals/{approvalId}/decision:
-    post:
-      operationId: Approvals_Decide
-      tags: [Approvals]
-      summary: Aprobar/Rechazar paso (C1, C2, F1)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - name: approvalId
-          in: path
-          required: true
-          schema: { type: string, format: uuid }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ApprovalDecision' }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Approval' }
-        '400': { $ref: '#/components/responses/BadRequest' }      # payload inválido
-        '401': { $ref: '#/components/responses/Unauthorized' }    # no autenticado
-        '403': { $ref: '#/components/responses/Forbidden' }       # sin rol C1/C2/F1
-        '409': { $ref: '#/components/responses/Conflict' }        # decisión duplicada, estado no permite
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects/{projectId}/workflow/transition:
-    post:
-      operationId: Workflow_Transition
-      tags: [Workflow]
-      summary: Hacer transición de estado (con guardias)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/WorkflowTransitionRequest' }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Project' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409':
-          description: Guard failed
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ProblemDetails' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects/{projectId}/sales-notes:
-    post:
-      operationId: SalesNotes_Create
-      tags: [SalesNotes]
-      summary: Emitir Nota de Venta (NV)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '201':
-          description: Creada
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/SalesNote' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/Conflict' }  # approvals incompletos, estado inválido
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-  /v1/projects/{projectId}/work-orders:
-    post:
-      operationId: WorkOrders_Create
-      tags: [WorkOrders]
-      summary: Emitir Orden de Trabajo (OT)
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '201':
-          description: Creada
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/WorkOrder' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/Conflict' }  # requiere NV previa, etc.
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-
-components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
-  parameters:
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema: { type: string, maxLength: 64 }
-      description: Clave idempotente por operación de escritura.
-    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
-    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
-    ProjectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
-    QuoteId: { name: quoteId, in: path, required: true, schema: { type: string, format: uuid } }
-  responses:
-    Problem:
-      description: Error
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    NotFound:
-      description: No encontrado
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    BadRequest:
-      description: Solicitud inválida
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    Unauthorized:
-      description: No autenticado
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    Forbidden:
-      description: Prohibido (RBAC)
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    Conflict:
-      description: Conflicto / Regla de negocio
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-    UnprocessableEntity:
-      description: Error semántico
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/ProblemDetails' }
-  schemas:
-    ProblemDetails:
-      type: object
-      properties:
-        type: { type: string }
-        title: { type: string }
-        status: { type: integer }
-        detail: { type: string }
-        instance: { type: string }
-        errors: { type: object, additionalProperties: { type: array, items: { type: string } } }
-      required: [title, status]
-
-    Money:
-      type: object
-      properties:
-        currency: { type: string, example: CLP }
-        amount: { type: integer, description: Monto en enteros (céntimos o pesos) }
-      required: [currency, amount]
-
-    Product:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        sku: { type: string }
-        name: { type: string }
-        uom: { type: string }
-      required: [id, sku, name]
-    PagedProducts:
-      type: object
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/Product' } }
-        page: { type: integer }
-        pageSize: { type: integer }
-        total: { type: integer }
-
-    PriceList:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        currency: { type: string }
-        validFrom: { type: string, format: date }
-        validTo: { type: [string, 'null'], format: date }
-      required: [id, name, currency, validFrom]
-    PagedPriceLists:
-      type: object
-      properties:
-        items: { type: array, items: { $ref: '#/components/schemas/PriceList' } }
-        page: { type: integer }
-        pageSize: { type: integer }
-        total: { type: integer }
-
-    ProjectCreateRequest:
-      type: object
-      properties:
-        name: { type: string }
-        clientId: { type: string, format: uuid }
-        priceListId:
-          type: string
-          format: uuid
-          description: Se bloquea al crear (LOCK)
-      required: [name, clientId, priceListId]
-    Project:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
-        code: { type: string }
-        clientId: { type: string, format: uuid }
-        priceListId: { type: string, format: uuid }
-        workflowState: { $ref: '#/components/schemas/WorkflowState' }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-      required: [id, name, clientId, priceListId, workflowState]
-
-    QuoteItemInput:
-      type: object
-      properties:
-        productId: { type: string, format: uuid }
-        quantity: { type: number, format: double }
-        unitPrice: { $ref: '#/components/schemas/Money' }
-        discountPct: { type: number, format: double, minimum: 0, maximum: 100, default: 0 }
-      required: [productId, quantity]
-    QuoteCreateRequest:
-      type: object
-      properties:
-        projectId: { type: string, format: uuid }
-        items: { type: array, items: { $ref: '#/components/schemas/QuoteItemInput' } }
-        notes: { type: string }
-      required: [projectId, items]
-    QuoteItem:
-      type: object
-      properties:
-        productId: { type: string, format: uuid }
-        quantity: { type: number }
-        unitPrice: { $ref: '#/components/schemas/Money' }
-        discountPct: { type: number }
-        lineTotal: { $ref: '#/components/schemas/Money' }
-    Quote:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        projectId: { type: string, format: uuid }
-        version: { type: integer }
-        status: { type: string, enum: [draft, submitted, approved, rejected] }
-        items: { type: array, items: { $ref: '#/components/schemas/QuoteItem' } }
-        subtotal: { $ref: '#/components/schemas/Money' }
-        taxes: { $ref: '#/components/schemas/Money' }
-        total: { $ref: '#/components/schemas/Money' }
-        createdAt: { type: string, format: date-time }
-        updatedAt: { type: string, format: date-time }
-
-    Approval:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        quoteId: { type: string, format: uuid }
-        step: { type: string, enum: [commercial_1, commercial_2, financial_1] }
-        status: { type: string, enum: [pending, approved, rejected] }
-        decidedBy: { type: [string, 'null'], format: uuid }
-        decidedAt: { type: [string, 'null'], format: date-time }
-        comments: { type: [string, 'null'] }
-    ApprovalDecision:
-      type: object
-      properties:
-        decision: { type: string, enum: [approve, reject] }
-        comments: { type: [string, 'null'] }
-      required: [decision]
-
-    WorkflowState:
-      type: string
-      enum:
-        [draft, quoted, approval_pending, approved, sales_note_issued, work_order_issued,
-         manufacturing, delivered, installed, closed]
-    WorkflowTransitionRequest:
-      type: object
-      properties:
-        to: { $ref: '#/components/schemas/WorkflowState' }
-        reason: { type: [string, 'null'] }
-      required: [to]
-
-    PriceAgreement:
-      type: object
-      properties:
-        projectId: { type: string, format: uuid }
-        priceListId: { type: string, format: uuid }
-        quoteId: { type: string, format: uuid }
-        effectiveAt: { type: string, format: date-time }
-
-    SalesNote:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        projectId: { type: string, format: uuid }
-        number: { type: string }
-        issuedAt: { type: string, format: date-time }
-        total: { $ref: '#/components/schemas/Money' }
-
-    WorkOrder:
-      type: object
-      properties:
-        id: { type: string, format: uuid }
-        projectId: { type: string, format: uuid }
-        number: { type: string }
-        issuedAt: { type: string, format: date-time }
+security:
+  - bearerAuth: []
