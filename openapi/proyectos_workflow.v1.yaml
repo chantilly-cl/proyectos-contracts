@@ -1,0 +1,434 @@
+openapi: 3.1.0
+info:
+  title: Proyectos Workflow API
+  version: 1.0.0-alpha
+  description: >
+    Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT.
+    Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
+servers:
+  - url: https://api.example.com
+    description: Producción
+  - url: http://localhost:4010
+    description: Mock local (Prism)
+security:
+  - bearerAuth: []
+tags:
+  - name: Catalog
+  - name: PriceLists
+  - name: Projects
+  - name: Quotes
+  - name: Approvals
+  - name: Workflow
+  - name: SalesNotes
+  - name: WorkOrders
+
+paths:
+  /v1/catalog/products:
+    get:
+      tags: [Catalog]
+      summary: Listar productos
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - in: query
+          name: q
+          schema: { type: string }
+          description: Búsqueda por código o descripción
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagedProducts' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/price-lists:
+    get:
+      tags: [PriceLists]
+      summary: Listar listas de precio
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagedPriceLists' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects:
+    post:
+      tags: [Projects]
+      summary: Crear proyecto (LOCK PriceList)
+      description: Crea el proyecto con PriceList asignado y bloqueado.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProjectCreateRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '409':
+          description: Conflicto (violación de regla de negocio)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects/{projectId}:
+    get:
+      tags: [Projects]
+      summary: Obtener proyecto
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects/{projectId}/price-agreement:
+    get:
+      tags: [Projects]
+      summary: Ver acuerdo de precios FREEZE
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PriceAgreement' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/quotes:
+    post:
+      tags: [Quotes]
+      summary: Crear cotización (versión 1)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/QuoteCreateRequest' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/quotes/{quoteId}:
+    get:
+      tags: [Quotes]
+      summary: Obtener cotización
+      parameters:
+        - $ref: '#/components/parameters/QuoteId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/quotes/{quoteId}/submit:
+    post:
+      tags: [Quotes]
+      summary: Enviar a aprobación (genera versión)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/QuoteId'
+      responses:
+        '202':
+          description: Enviado a approvals
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Quote' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/approvals/{approvalId}/decision:
+    post:
+      tags: [Approvals]
+      summary: Aprobar/Rechazar paso (C1, C2, F1)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - name: approvalId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ApprovalDecision' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Approval' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects/{projectId}/workflow/transition:
+    post:
+      tags: [Workflow]
+      summary: Hacer transición de estado (con guardias)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/WorkflowTransitionRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Project' }
+        '409':
+          description: Guard failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects/{projectId}/sales-notes:
+    post:
+      tags: [SalesNotes]
+      summary: Emitir Nota de Venta (NV)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SalesNote' }
+        default: { $ref: '#/components/responses/Problem' }
+
+  /v1/projects/{projectId}/work-orders:
+    post:
+      tags: [WorkOrders]
+      summary: Emitir Orden de Trabajo (OT)
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WorkOrder' }
+        default: { $ref: '#/components/responses/Problem' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema: { type: string, maxLength: 64 }
+      description: Clave idempotente por operación de escritura.
+    Page: { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+    PageSize: { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+    ProjectId: { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+    QuoteId: { name: quoteId, in: path, required: true, schema: { type: string, format: uuid } }
+  responses:
+    Problem:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ProblemDetails' }
+  schemas:
+    ProblemDetails:
+      type: object
+      properties:
+        type: { type: string }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        errors: { type: object, additionalProperties: { type: array, items: { type: string } } }
+      required: [title, status]
+
+    Money:
+      type: object
+      properties:
+        currency: { type: string, example: CLP }
+        amount: { type: integer, description: Monto en enteros (céntimos o pesos) }
+      required: [currency, amount]
+
+    Product:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        sku: { type: string }
+        name: { type: string }
+        uom: { type: string }
+      required: [id, sku, name]
+    PagedProducts:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Product' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    PriceList:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        currency: { type: string }
+        validFrom: { type: string, format: date }
+        validTo: { type: string, format: date, nullable: true }
+      required: [id, name, currency, validFrom]
+    PagedPriceLists:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/PriceList' } }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+
+    ProjectCreateRequest:
+      type: object
+      properties:
+        name: { type: string }
+        clientId: { type: string, format: uuid }
+        priceListId:
+          type: string
+          format: uuid
+          description: Se bloquea al crear (LOCK)
+      required: [name, clientId, priceListId]
+    Project:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        code: { type: string }
+        clientId: { type: string, format: uuid }
+        priceListId: { type: string, format: uuid }
+        workflowState: { $ref: '#/components/schemas/WorkflowState' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      required: [id, name, clientId, priceListId, workflowState]
+
+    QuoteItemInput:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        quantity: { type: number, format: double }
+        unitPrice: { $ref: '#/components/schemas/Money' }
+        discountPct: { type: number, format: double, minimum: 0, maximum: 100, default: 0 }
+      required: [productId, quantity]
+    QuoteCreateRequest:
+      type: object
+      properties:
+        projectId: { type: string, format: uuid }
+        items: { type: array, items: { $ref: '#/components/schemas/QuoteItemInput' } }
+        notes: { type: string }
+      required: [projectId, items]
+    QuoteItem:
+      type: object
+      properties:
+        productId: { type: string, format: uuid }
+        quantity: { type: number }
+        unitPrice: { $ref: '#/components/schemas/Money' }
+        discountPct: { type: number }
+        lineTotal: { $ref: '#/components/schemas/Money' }
+    Quote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        version: { type: integer }
+        status: { type: string, enum: [draft, submitted, approved, rejected] }
+        items: { type: array, items: { $ref: '#/components/schemas/QuoteItem' } }
+        subtotal: { $ref: '#/components/schemas/Money' }
+        taxes: { $ref: '#/components/schemas/Money' }
+        total: { $ref: '#/components/schemas/Money' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    Approval:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        quoteId: { type: string, format: uuid }
+        step: { type: string, enum: [commercial_1, commercial_2, financial_1] }
+        status: { type: string, enum: [pending, approved, rejected] }
+        decidedBy: { type: string, format: uuid, nullable: true }
+        decidedAt: { type: string, format: date-time, nullable: true }
+        comments: { type: string, nullable: true }
+    ApprovalDecision:
+      type: object
+      properties:
+        decision: { type: string, enum: [approve, reject] }
+        comments: { type: string, nullable: true }
+      required: [decision]
+
+    WorkflowState:
+      type: string
+      enum:
+        [draft, quoted, approval_pending, approved, sales_note_issued, work_order_issued,
+         manufacturing, delivered, installed, closed]
+    WorkflowTransitionRequest:
+      type: object
+      properties:
+        to: { $ref: '#/components/schemas/WorkflowState' }
+        reason: { type: string, nullable: true }
+      required: [to]
+
+    PriceAgreement:
+      type: object
+      properties:
+        projectId: { type: string, format: uuid }
+        priceListId: { type: string, format: uuid }
+        quoteId: { type: string, format: uuid }
+        effectiveAt: { type: string, format: date-time }
+
+    SalesNote:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        number: { type: string }
+        issuedAt: { type: string, format: date-time }
+        total: { $ref: '#/components/schemas/Money' }
+
+    WorkOrder:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        number: { type: string }
+        issuedAt: { type: string, format: date-time }

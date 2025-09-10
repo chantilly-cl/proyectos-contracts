@@ -1,0 +1,133 @@
+Project proyectos_workflow {
+  database_type: 'PostgreSQL'
+  note: 'PriceList LOCK at Project; prices FREEZE at Quote approval via price_agreements.'
+}
+
+Table clients {
+  id uuid [pk]
+  name varchar(200)
+  tax_id varchar(32)
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table price_lists {
+  id uuid [pk]
+  name varchar(120)
+  currency char(3)
+  valid_from date
+  valid_to date [null]
+  is_active bool
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table products {
+  id uuid [pk]
+  sku varchar(64) [unique]
+  name varchar(200)
+  uom varchar(16)
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table price_list_items {
+  id uuid [pk]
+  price_list_id uuid [ref: > price_lists.id]
+  product_id uuid [ref: > products.id]
+  unit_price_cents bigint
+  currency char(3)
+  unique(price_list_id, product_id)
+}
+
+Table projects {
+  id uuid [pk]
+  code varchar(40) [unique]
+  name varchar(200)
+  client_id uuid [ref: > clients.id]
+  price_list_id uuid [ref: > price_lists.id, note: 'LOCK: no mutable']
+  workflow_state varchar(40) // draft, approval_pending, approved, ...
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table quotes {
+  id uuid [pk]
+  project_id uuid [ref: > projects.id]
+  version int
+  status varchar(20) // draft, submitted, approved, rejected
+  subtotal_cents bigint
+  taxes_cents bigint
+  total_cents bigint
+  currency char(3)
+  created_at timestamp
+  updated_at timestamp
+  unique(project_id, version)
+}
+
+Table quote_items {
+  id uuid [pk]
+  quote_id uuid [ref: > quotes.id]
+  product_id uuid [ref: > products.id]
+  quantity numeric(18,4)
+  unit_price_cents bigint
+  discount_pct numeric(5,2)
+  line_total_cents bigint
+}
+
+Table approvals {
+  id uuid [pk]
+  quote_id uuid [ref: > quotes.id]
+  step varchar(20) // commercial_1, commercial_2, financial_1
+  status varchar(20) // pending, approved, rejected
+  decided_by uuid [null]
+  decided_at timestamp [null]
+  comments text [null]
+  unique(quote_id, step)
+}
+
+Table price_agreements {
+  id uuid [pk]
+  project_id uuid [ref: > projects.id]
+  price_list_id uuid [ref: > price_lists.id]
+  quote_id uuid [ref: > quotes.id]
+  effective_at timestamp
+  note: 'Freeze de precios al aprobar cotización final.'
+}
+
+Table sales_notes {
+  id uuid [pk]
+  project_id uuid [ref: > projects.id]
+  number varchar(40)
+  issued_at timestamp
+  total_cents bigint
+  currency char(3)
+}
+
+Table work_orders {
+  id uuid [pk]
+  project_id uuid [ref: > projects.id]
+  number varchar(40)
+  issued_at timestamp
+}
+
+Table audit_logs {
+  id uuid [pk]
+  entity varchar(60)
+  entity_id uuid
+  action varchar(40)
+  actor_id uuid [null]
+  data jsonb
+  created_at timestamp
+}
+
+Ref: quotes.project_id > projects.id
+Ref: quote_items.quote_id > quotes.id
+Ref: approvals.quote_id > quotes.id
+Ref: price_list_items.price_list_id > price_lists.id
+Ref: price_list_items.product_id > products.id
+Ref: projects.price_list_id > price_lists.id
+Ref: price_agreements.project_id > projects.id
+Ref: price_agreements.quote_id > quotes.id
+Ref: sales_notes.project_id > projects.id
+Ref: work_orders.project_id > projects.id
