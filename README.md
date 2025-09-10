@@ -35,6 +35,7 @@ npm run build
 
 # 3) Mock local de la API (Prism)
 npm run mock   # expone http://localhost:4010
+```
 
 [![contracts-ci](https://github.com/chantilly-cl/proyectos-contracts/actions/workflows/contracts-ci.yml/badge.svg)](https://github.com/chantilly-cl/proyectos-contracts/actions/workflows/contracts-ci.yml)
 
