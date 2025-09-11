@@ -1,7 +1,7 @@
 {
   "name": "Proyectos Workflow (Local Mock)",
   "values": [
-    { "key": "baseUrl", "value": "http://localhost:4010", "type": "text", "enabled": true },
+    { "key": "baseUrl", "value": "http://localhost:5087", "type": "text", "enabled": true },
     { "key": "bearerToken", "value": "REEMPLAZA_CON_TU_JWT", "type": "text", "enabled": true }
   ],
   "_postman_variable_scope": "environment",
