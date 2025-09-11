@@ -4,13 +4,13 @@ info:
   version: 1.0.0-alpha
   license:
     name: Proprietary – All rights reserved
-    url: 'https://tu-dominio/legal'
+    url: 'https://chantillyapps.cl/legal'
   description: |
     Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
 servers:
   - url: 'https://api.chantillyapps.cl'
     description: Producción
-  - url: 'http://api-dev.chantillyapps.cl'
+  - url: 'http://localhost:4010'
     description: Mock local (Prism)
 paths:
   /v1/catalog/products:
@@ -419,7 +419,7 @@ components:
             items:
               type: string
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
@@ -452,7 +452,7 @@ components:
         uom:
           type: string
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
@@ -493,7 +493,7 @@ components:
             - 'null'
           format: date
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
@@ -557,7 +557,7 @@ components:
           type: string
           format: date-time
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
@@ -652,7 +652,7 @@ components:
           type: string
           format: date-time
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
@@ -693,7 +693,7 @@ components:
             - string
             - 'null'
       example:
-        type: 'https://errors.tu-dominio/business-rule'
+        type: 'https://errors.chantillyapps.cl/business-rule'
         title: Business Rule Violation
         status: 409
         detail: price_list_id es inmutable para el proyecto
