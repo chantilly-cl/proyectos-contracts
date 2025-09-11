@@ -8,9 +8,9 @@ info:
   description: |
     Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
 servers:
-  - url: 'https://api.chantillyapps.cl'
+  - url: 'https://proyectos-api.chantillyapps.cl'
     description: Producción
-  - url: 'http://localhost:4010'
+  - url: 'http://localhost:5087'
     description: Mock local (Prism)
 paths:
   /v1/catalog/products:
