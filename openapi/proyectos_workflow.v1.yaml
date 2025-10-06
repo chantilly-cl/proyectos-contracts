@@ -113,6 +113,38 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Projects
+  /v1/projects/{projectId}/quotes:
+    post:
+      operationId: ProjectQuotes_Create
+      summary: Crear cotización (draft) para un proyecto
+      description: |
+        Crea una cotización **versión 1** en estado `draft` para el `projectId` dado.
+        Soporta **descuentos por ítem** y **descuento global** (XOR entre % y monto).
+        Usa la PriceList **LOCK** del proyecto para resolver precios si `unitPrice` no se provee.
+      tags: [Quotes, Projects]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectQuoteCreateRequest'   # ⬅️ NUEVO
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quote'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        default: { $ref: '#/components/responses/Problem' }
   '/v1/projects/{projectId}/price-agreement':
     get:
       operationId: Projects_GetPriceAgreement
@@ -214,6 +246,56 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Quotes
+  /v1/quotes/{quoteId}/send-email:
+    post:
+      operationId: Quotes_SendEmail
+      summary: Enviar cotización por email (idempotente)
+      description: |
+        Envía la cotización al email del cliente del proyecto.
+        Si la cotización estaba en `draft`, pasa a `sent`.
+        Reintentos con la misma **Idempotency-Key** no duplican el envío.
+      tags: [Quotes]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/QuoteId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      responses:
+        '202':
+          description: Envío encolado/aceptado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean, example: true }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/quotes/{quoteId}/pdf:
+    get:
+      operationId: Quotes_GetPdf
+      summary: Obtener PDF de la cotización
+      description: Devuelve el PDF; usar `?download=true` para forzar descarga.
+      tags: [Quotes]
+      parameters:
+        - $ref: '#/components/parameters/QuoteId'
+        - name: download
+          in: query
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
   '/v1/approvals/{approvalId}/decision':
     post:
       operationId: Approvals_Decide
@@ -343,8 +425,50 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - WorkOrders
+  /v1/clients:
+    get:
+      operationId: Clients_List
+      summary: Listar clientes (selector)
+      tags: [Clients]
+      parameters:
+        - name: q
+          in: query
+          description: Búsqueda por nombre/RUT/email
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClients'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/clients/{clientId}:
+    get:
+      operationId: Clients_Get
+      summary: Obtener cliente
+      tags: [Clients]
+      parameters:
+        - $ref: '#/components/parameters/ClientId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Client' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
 components:
   parameters:
+    ClientId:
+      name: clientId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -399,6 +523,39 @@ components:
         maxLength: 64
       description: ID generado por el cliente para trazar la petición extremo a extremo.
   schemas:
+    Client:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email:
+          type:
+            - string
+            - 'null'
+          format: email
+        rut:
+          type:
+            - string
+            - 'null'
+        phones:
+          type:
+            - array
+            - 'null'
+          items: { type: string }
+        billingAddress:
+          type:
+            - string
+            - 'null'
+      required: [id, name]
+    PagedClients:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Client' }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
     ProblemDetails:
       type: object
       properties:
@@ -568,6 +725,34 @@ components:
         - clientId
         - priceListId
         - workflowState
+    ProjectQuoteCreateRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items: { $ref: '#/components/schemas/QuoteItemInput' }
+        discountGlobalPct:
+          type:
+            - number
+            - 'null'
+          format: double
+          minimum: 0
+          maximum: 100
+        discountGlobalAmt:
+          anyOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
+        notes:
+          type:
+            - string
+            - 'null'
+      required: [items]
+      allOf:
+        - oneOf:
+            - required: [discountGlobalPct]
+            - required: [discountGlobalAmt]
+            - {}
     QuoteItemInput:
       type: object
       properties:
@@ -577,10 +762,15 @@ components:
         quantity:
           type: number
           format: double
+          minimum: 0.000001
         unitPrice:
-          $ref: '#/components/schemas/Money'
+          anyOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
         discountPct:
-          type: number
+          type:
+            - number
+            - 'null'
           format: double
           default: 0
           maximum: 100
@@ -614,7 +804,13 @@ components:
         unitPrice:
           $ref: '#/components/schemas/Money'
         discountPct:
-          type: number
+          type:
+            - number
+            - 'null'
+        discountAmt:
+          anyOf:
+            - { $ref: '#/components/schemas/Money' }
+            - { type: 'null' }
         lineTotal:
           $ref: '#/components/schemas/Money'
     Quote:
@@ -830,6 +1026,8 @@ components:
       scheme: bearer
       bearerFormat: JWT
 tags:
+  - name: Clients
+    description: Endpoints para búsqueda y detalle de clientes.
   - name: Catalog
     description: 'Endpoints de catálogo de productos (SKU, descripción, UoM) para cotizar.'
   - name: PriceLists
