@@ -138,6 +138,28 @@ paths:
       tags:
         - PriceLists
   /v1/projects:
+    get:
+      operationId: Projects_List
+      summary: Listar proyectos
+      description: Listado paginado con filtros y ordenamiento.
+      tags: [Projects]
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+        - $ref: '#/components/parameters/Q'
+        - $ref: '#/components/parameters/ClientIdFilter'
+        - $ref: '#/components/parameters/ProjectState'
+        - $ref: '#/components/parameters/OrderBy'
+        - $ref: '#/components/parameters/SortDir'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PagedProjects' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Problem' }
     post:
       operationId: Projects_Create
       summary: Crear proyecto (LOCK PriceList)
@@ -267,48 +289,39 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
+              schema: { $ref: '#/components/schemas/Project' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
+      tags: [Projects]
     patch:
       operationId: Projects_Patch
-      summary: Actualizar datos del proyecto
+      summary: Actualizar datos del proyecto (concurrencia por ETag)
       parameters:
         - $ref: '#/components/parameters/ProjectId'
         - $ref: '#/components/parameters/XRequestId'
         - $ref: '#/components/parameters/XCorrelationId'
+        - $ref: '#/components/parameters/IfMatch'
       requestBody:
         required: true
         content:
           application/json:
-            schema:
-              $ref: '#/components/schemas/ProjectPatchRequest'
+            schema: { $ref: '#/components/schemas/ProjectPatchRequest' }
       responses:
-        '204':
-          description: Actualizado
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        '204': { description: Actualizado }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '412':
-          description: Precondition Failed
+          description: Precondition Failed (If-Match / ETag no coincide)
           content:
             application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
+              schema: { $ref: '#/components/schemas/ProblemDetails' }
+        default: { $ref: '#/components/responses/Problem' }
+      tags: [Projects]
   /v1/projects/{projectId}/quotes:
     post:
       operationId: ProjectQuotes_Create
@@ -898,6 +911,41 @@ components:
         type: string
         maxLength: 64
       description: ID generado por el cliente para trazar la petición extremo a extremo.
+    Q:
+      name: q
+      in: query
+      description: Busca por código de proyecto o nombre/RUT/email del cliente
+      schema: { type: string, maxLength: 120 }
+    ProjectState:
+      name: state
+      in: query
+      description: Filtra por estado del workflow
+      schema: { $ref: '#/components/schemas/WorkflowState' }
+    ClientIdFilter:
+      name: clientId
+      in: query
+      description: Filtra por cliente
+      schema: { type: string, format: uuid }
+    OrderBy:
+      name: orderBy
+      in: query
+      description: Campo de orden default = createdAt DESC)
+      schema: { type: string, enum: [createdAt, updatedAt, code] }
+    SortDir:
+      name: sort
+      in: query
+      description: Dirección de orden
+      schema: { type: string, enum: [asc, desc], default: desc }
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: ETag para concurrencia optimista (responde 412 si no coincide).
+      schema: { type: string, maxLength: 120 }
+  headers:
+    ETag:
+      description: Validador de entidad (weak ETag recomendado = W/"<hash>")
+      schema: { type: string }
   schemas:
     Client:
       type: object
@@ -969,6 +1017,28 @@ components:
       required:
         - title
         - status
+    ProjectListItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        clientId: { type: string, format: uuid }
+        workflowState: { $ref: '#/components/schemas/WorkflowState' }
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: [string, 'null']
+          format: date-time
+      required: [id, code, clientId, workflowState, createdAt]
+    PagedProjects:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ProjectListItem' }
+        page: { type: integer }
+        pageSize: { type: integer }
+        total: { type: integer }
+      required: [items, page, pageSize, total]
     Money:
       type: object
       properties:
