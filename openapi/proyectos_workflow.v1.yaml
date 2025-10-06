@@ -173,6 +173,43 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Projects
+  /v1/projects+quotes:
+    post:
+      operationId: ProjectsQuotes_Create
+      summary: Crear proyecto y cotización inicial (draft)
+      description: |
+        Crea un proyecto en estado `draft` y su cotización inicial también en `draft`
+        de manera atómica. Requiere `Idempotency-Key`.
+      tags: [Projects, Quotes]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectWithQuoteCreateRequest'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWithQuote'
+        '200':
+          description: Reintento idempotente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectWithQuote'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/projects/{projectId}/price-list/assign:
     post:
       operationId: Projects_AssignPriceList
@@ -1091,12 +1128,22 @@ components:
           type: boolean
         source:
           type: string
+        currency:
+          type: string
+          description: Moneda base de la lista de precio
+          example: CLP
+        factor:
+          type: number
+          format: double
+          description: Factor multiplicador aplicado al precio base
       required:
         - id
         - key
         - name
         - active
         - source
+        - currency
+        - factor
     PagedPriceLists:
       type: object
       properties:
@@ -1215,13 +1262,61 @@ components:
             - 'null'
       required:
         - items
+    ProjectWithQuoteCreateRequest:
+      type: object
+      properties:
+        projectCode:
+          type:
+            - string
+            - 'null'
+          description: Código opcional; si se omite se genera automáticamente.
+        clientId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QuoteItemInput'
+        discountGlobalPercent:
+          type:
+            - number
+            - 'null'
+          format: double
+          minimum: 0
+          maximum: 100
+        discountGlobalAmount:
+          anyOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
+        notes:
+          type:
+            - string
+            - 'null'
+      required:
+        - clientId
+        - priceListId
+        - items
+    ProjectWithQuote:
+      type: object
+      properties:
+        project:
+          $ref: '#/components/schemas/Project'
+        quote:
+          $ref: '#/components/schemas/Quote'
+      required:
+        - project
+        - quote
     QuoteItemInput:
       type: object
       properties:
         productId:
           type: string
           format: uuid
-        quantity:
+        qty:
           type: number
           format: double
           minimum: 0.000001
@@ -1236,13 +1331,17 @@ components:
           format: double
           minimum: 0
           maximum: 100
+        discountAmount:
+          anyOf:
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
         notes:
           type:
             - string
             - 'null'
       required:
         - productId
-        - quantity
+        - qty
     QuoteCreateRequest:
       type: object
       properties:
@@ -1274,6 +1373,8 @@ components:
         discountPercent:
           type: number
           format: double
+        discountAmount:
+          $ref: '#/components/schemas/Money'
         lineTotal:
           $ref: '#/components/schemas/Money'
       required:
@@ -1298,6 +1399,7 @@ components:
           enum:
             - draft
             - submitted
+            - sent
             - approved
             - rejected
         items:
@@ -1305,6 +1407,8 @@ components:
           items:
             $ref: '#/components/schemas/QuoteItem'
         subtotal:
+          $ref: '#/components/schemas/Money'
+        discounts:
           $ref: '#/components/schemas/Money'
         taxes:
           $ref: '#/components/schemas/Money'
@@ -1325,6 +1429,7 @@ components:
         - status
         - items
         - subtotal
+        - discounts
         - taxes
         - total
         - createdAt
