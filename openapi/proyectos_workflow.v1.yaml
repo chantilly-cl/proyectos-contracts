@@ -25,6 +25,12 @@ paths:
           description: Búsqueda por código o descripción
           schema:
             type: string
+        - name: active
+          in: query
+          description: Filtra por productos activos/inactivos
+          schema:
+            type: boolean
+            default: true
       responses:
         '200':
           description: OK
@@ -32,12 +38,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PagedProducts'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Problem'
       tags:
         - Catalog
+  /v1/catalog/products/{key}:
+    get:
+      operationId: Catalog_GetProduct
+      summary: Obtener producto por clave
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: Clave o SKU del producto
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Catalog
+  /v1/catalog/products/{key}/config:
+    get:
+      operationId: Catalog_GetProductConfig
+      summary: Obtener configuración del producto
+      parameters:
+        - name: key
+          in: path
+          required: true
+          description: Clave o SKU del producto
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Catalog
+  /me:
+    get:
+      operationId: Me_Get
+      summary: Obtener perfil del usuario autenticado
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Identity
   /v1/price-lists:
     get:
       operationId: PriceLists_List
@@ -52,6 +129,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PagedPriceLists'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         default:
@@ -94,6 +173,54 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Projects
+  /v1/projects/{projectId}/price-list/assign:
+    post:
+      operationId: Projects_AssignPriceList
+      summary: Asignar PriceList a proyecto
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignPriceListRequest'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
+  /v1/projects/{projectId}/price-list/override:
+    post:
+      operationId: Projects_OverridePriceList
+      summary: Sobrescribir PriceList de proyecto
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverridePriceListRequest'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
   '/v1/projects/{projectId}':
     get:
       operationId: Projects_Get
@@ -107,8 +234,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Project'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Projects
+    patch:
+      operationId: Projects_Patch
+      summary: Actualizar datos del proyecto
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPatchRequest'
+      responses:
+        '204':
+          description: Actualizado
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          description: Precondition Failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         default:
           $ref: '#/components/responses/Problem'
       tags:
@@ -164,6 +323,114 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Projects
+  /v1/projects/{projectId}/approvals:
+    get:
+      operationId: Approvals_ListByProject
+      summary: Listar aprobaciones de un proyecto
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Approvals
+  '/v1/projects/{projectId}/approvals/{approvalId}':
+    get:
+      operationId: Approvals_GetByProject
+      summary: Obtener aprobación de proyecto
+      parameters:
+        - $ref: '#/components/parameters/ProjectId'
+        - name: approvalId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Approvals
+  /v1/projects/{projectId}/approvals/commercial:
+    post:
+      operationId: Approvals_ApproveCommercial
+      summary: Registrar aprobación comercial
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Approvals
+  /v1/projects/{projectId}/approvals/financial:
+    post:
+      operationId: Approvals_ApproveFinancial
+      summary: Registrar aprobación financiera
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/ProjectId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Approvals
   /v1/quotes:
     post:
       operationId: Quotes_Create
@@ -189,6 +456,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '422':
           $ref: '#/components/responses/UnprocessableEntity'
         default:
@@ -238,6 +507,72 @@ paths:
                 $ref: '#/components/schemas/Quote'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Quotes
+  /v1/quotes/{quoteId}/items:
+    post:
+      operationId: QuoteItems_Add
+      summary: Agregar ítem a cotización
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/QuoteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteItemCreate'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteVersionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+      tags:
+        - Quotes
+  /v1/quotes/{quoteId}/items/bulk:
+    post:
+      operationId: QuoteItems_AddBulk
+      summary: Agregar ítems masivamente a cotización
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/QuoteId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                $ref: '#/components/schemas/QuoteItemCreate'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteVersionSummary'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '422':
@@ -389,6 +724,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SalesNote'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -415,6 +752,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/WorkOrder'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
@@ -526,8 +865,11 @@ components:
     Client:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        name: { type: string }
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
         email:
           type:
             - string
@@ -541,21 +883,33 @@ components:
           type:
             - array
             - 'null'
-          items: { type: string }
+          items:
+            type: string
         billingAddress:
           type:
             - string
             - 'null'
-      required: [id, name]
+      required:
+        - id
+        - name
     PagedClients:
       type: object
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/Client' }
-        page: { type: integer }
-        pageSize: { type: integer }
-        total: { type: integer }
+          items:
+            $ref: '#/components/schemas/Client'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+      required:
+        - items
+        - page
+        - pageSize
+        - total
     ProblemDetails:
       type: object
       properties:
@@ -575,12 +929,6 @@ components:
             type: array
             items:
               type: string
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
       required:
         - title
         - status
@@ -599,21 +947,67 @@ components:
     Product:
       type: object
       properties:
+        sku:
+          type: string
+        title:
+          type:
+            - string
+            - 'null'
+        description:
+          type:
+            - string
+            - 'null'
+        codUmed:
+          type:
+            - string
+            - 'null'
+        inventariable:
+          type:
+            - integer
+            - 'null'
+        price:
+          type: number
+          format: double
+        compareAtPrice:
+          type: number
+          format: double
+        discount:
+          type: number
+          format: double
+        discountedAmount:
+          type: number
+          format: double
+        stock:
+          type: number
+          format: double
+        costoPromedio:
+          type: number
+          format: double
+        margen:
+          type: number
+          format: double
+      required:
+        - sku
+        - price
+        - compareAtPrice
+        - discount
+        - discountedAmount
+        - stock
+        - costoPromedio
+        - margen
+    ProductListItem:
+      type: object
+      properties:
         id:
           type: string
-          format: uuid
         sku:
           type: string
         name:
           type: string
         uom:
-          type: string
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
+          type:
+            - string
+            - 'null'
       required:
         - id
         - sku
@@ -624,42 +1018,85 @@ components:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/Product'
+            $ref: '#/components/schemas/ProductListItem'
         page:
           type: integer
         pageSize:
           type: integer
         total:
           type: integer
+      required:
+        - items
+        - page
+        - pageSize
+        - total
+    ProductConfig:
+      type: object
+      properties:
+        key:
+          type: string
+        name:
+          type: string
+        unit:
+          type:
+            - string
+            - 'null'
+        options:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductOptionDefinition'
+      required:
+        - key
+        - name
+        - options
+    ProductOptionDefinition:
+      type: object
+      properties:
+        key:
+          type: string
+        displayName:
+          type: string
+        type:
+          type: string
+        values:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductOptionValue'
+      required:
+        - key
+        - displayName
+        - type
+        - values
+    ProductOptionValue:
+      type: object
+      properties:
+        key:
+          type: string
+        displayName:
+          type: string
+      required:
+        - key
+        - displayName
     PriceList:
       type: object
       properties:
         id:
           type: string
           format: uuid
+        key:
+          type: string
         name:
           type: string
-        currency:
+        active:
+          type: boolean
+        source:
           type: string
-        validFrom:
-          type: string
-          format: date
-        validTo:
-          type:
-            - string
-            - 'null'
-          format: date
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
       required:
         - id
+        - key
         - name
-        - currency
-        - validFrom
+        - active
+        - source
     PagedPriceLists:
       type: object
       properties:
@@ -673,30 +1110,34 @@ components:
           type: integer
         total:
           type: integer
-    ProjectCreateRequest:
+      required:
+        - items
+        - page
+        - pageSize
+        - total
+    AssignPriceListRequest:
       type: object
       properties:
-        name:
-          type: string
-        clientId:
-          type: string
-          format: uuid
         priceListId:
-          description: Se bloquea al crear (LOCK)
           type: string
           format: uuid
       required:
-        - name
-        - clientId
         - priceListId
-    Project:
+    OverridePriceListRequest:
       type: object
       properties:
-        id:
+        priceListId:
           type: string
           format: uuid
-        name:
-          type: string
+        currency:
+          type:
+            - string
+            - 'null'
+      required:
+        - priceListId
+    ProjectCreateRequest:
+      type: object
+      properties:
         code:
           type: string
         clientId:
@@ -705,23 +1146,47 @@ components:
         priceListId:
           type: string
           format: uuid
+        installationAddressId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+      required:
+        - code
+        - clientId
+        - priceListId
+    ProjectPatchRequest:
+      type: object
+      properties:
+        installationAddressId:
+          type:
+            - string
+            - 'null'
+          format: uuid
+    Project:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        installationAddressId:
+          type:
+            - string
+            - 'null'
+          format: uuid
         workflowState:
           $ref: '#/components/schemas/WorkflowState'
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
       required:
         - id
-        - name
+        - code
         - clientId
         - priceListId
         - workflowState
@@ -731,28 +1196,25 @@ components:
         items:
           type: array
           minItems: 1
-          items: { $ref: '#/components/schemas/QuoteItemInput' }
-        discountGlobalPct:
+          items:
+            $ref: '#/components/schemas/QuoteItemInput'
+        discountGlobalPercent:
           type:
             - number
             - 'null'
           format: double
           minimum: 0
           maximum: 100
-        discountGlobalAmt:
+        discountGlobalAmount:
           anyOf:
-            - { $ref: '#/components/schemas/Money' }
-            - { type: 'null' }
+            - $ref: '#/components/schemas/Money'
+            - type: 'null'
         notes:
           type:
             - string
             - 'null'
-      required: [items]
-      allOf:
-        - oneOf:
-            - required: [discountGlobalPct]
-            - required: [discountGlobalAmt]
-            - {}
+      required:
+        - items
     QuoteItemInput:
       type: object
       properties:
@@ -767,14 +1229,17 @@ components:
           anyOf:
             - $ref: '#/components/schemas/Money'
             - type: 'null'
-        discountPct:
+        discountPercent:
           type:
             - number
             - 'null'
           format: double
-          default: 0
-          maximum: 100
           minimum: 0
+          maximum: 100
+        notes:
+          type:
+            - string
+            - 'null'
       required:
         - productId
         - quantity
@@ -789,7 +1254,9 @@ components:
           items:
             $ref: '#/components/schemas/QuoteItemInput'
         notes:
-          type: string
+          type:
+            - string
+            - 'null'
       required:
         - projectId
         - items
@@ -801,18 +1268,20 @@ components:
           format: uuid
         quantity:
           type: number
+          format: double
         unitPrice:
           $ref: '#/components/schemas/Money'
-        discountPct:
-          type:
-            - number
-            - 'null'
-        discountAmt:
-          anyOf:
-            - { $ref: '#/components/schemas/Money' }
-            - { type: 'null' }
+        discountPercent:
+          type: number
+          format: double
         lineTotal:
           $ref: '#/components/schemas/Money'
+      required:
+        - productId
+        - quantity
+        - unitPrice
+        - discountPercent
+        - lineTotal
     Quote:
       type: object
       properties:
@@ -845,14 +1314,80 @@ components:
           type: string
           format: date-time
         updatedAt:
-          type: string
+          type:
+            - string
+            - 'null'
           format: date-time
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
+      required:
+        - id
+        - projectId
+        - version
+        - status
+        - items
+        - subtotal
+        - taxes
+        - total
+        - createdAt
+    QuoteItemCreate:
+      type: object
+      properties:
+        sku:
+          type: string
+        quantity:
+          type: number
+          format: double
+          minimum: 0.000001
+        unitPrice:
+          type:
+            - number
+            - 'null'
+          format: double
+        discountPercent:
+          type:
+            - number
+            - 'null'
+          format: double
+          minimum: 0
+          maximum: 100
+        discountAmount:
+          type:
+            - number
+            - 'null'
+          format: double
+        notes:
+          type:
+            - string
+            - 'null'
+      required:
+        - sku
+        - quantity
+    QuoteVersionSummary:
+      type: object
+      properties:
+        versionId:
+          type: string
+          format: uuid
+        itemsCount:
+          type: integer
+        subtotal:
+          type: number
+          format: double
+        discount:
+          type: number
+          format: double
+        tax:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+      required:
+        - versionId
+        - itemsCount
+        - subtotal
+        - discount
+        - tax
+        - total
     Approval:
       type: object
       properties:
@@ -888,21 +1423,34 @@ components:
           type:
             - string
             - 'null'
-      example:
-        type: 'https://errors.chantillyapps.cl/business-rule'
-        title: Business Rule Violation
-        status: 409
-        detail: price_list_id es inmutable para el proyecto
-        instance: /v1/projects/7f3e…
+      required:
+        - id
+        - quoteId
+        - step
+        - status
+    ApprovalRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          enum:
+            - approved
+            - rejected
+        comment:
+          type:
+            - string
+            - 'null'
+      required:
+        - decision
     ApprovalDecision:
       type: object
       properties:
         decision:
           type: string
           enum:
-            - approve
-            - reject
-        comments:
+            - approved
+            - rejected
+        comment:
           type:
             - string
             - 'null'
@@ -924,14 +1472,14 @@ components:
     WorkflowTransitionRequest:
       type: object
       properties:
-        to:
+        targetState:
           $ref: '#/components/schemas/WorkflowState'
-        reason:
+        comment:
           type:
             - string
             - 'null'
       required:
-        - to
+        - targetState
     PriceAgreement:
       type: object
       properties:
@@ -947,6 +1495,11 @@ components:
         effectiveAt:
           type: string
           format: date-time
+      required:
+        - projectId
+        - priceListId
+        - quoteId
+        - effectiveAt
     SalesNote:
       type: object
       properties:
@@ -957,12 +1510,12 @@ components:
           type: string
           format: uuid
         number:
-          type: string
-        issuedAt:
-          type: string
-          format: date-time
-        total:
-          $ref: '#/components/schemas/Money'
+          type:
+            - string
+            - 'null'
+      required:
+        - id
+        - projectId
     WorkOrder:
       type: object
       properties:
@@ -973,10 +1526,38 @@ components:
           type: string
           format: uuid
         number:
+          type:
+            - string
+            - 'null'
+      required:
+        - id
+        - projectId
+    MeProfile:
+      type: object
+      properties:
+        id:
           type: string
-        issuedAt:
-          type: string
-          format: date-time
+        email:
+          type:
+            - string
+            - 'null'
+          format: email
+        name:
+          type:
+            - string
+            - 'null'
+        roles:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+      required:
+        - id
+        - roles
+        - scopes
   responses:
     Problem:
       description: Error
@@ -1044,5 +1625,7 @@ tags:
     description: Emisión y consulta de Notas de Venta (NV) derivadas de proyectos aprobados.
   - name: WorkOrders
     description: Emisión y consulta de Órdenes de Trabajo (OT) posteriores a NV.
+  - name: Identity
+    description: Información del usuario autenticado.
 security:
   - bearerAuth: []
