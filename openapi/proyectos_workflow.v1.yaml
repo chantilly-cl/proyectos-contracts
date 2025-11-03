@@ -1,18 +1,58 @@
-openapi: 3.1.0
+openapi: 3.2.0
 info:
   title: Proyectos Workflow API
-  version: 1.0.0-alpha
+  version: 1.0.0-beta.1
   license:
     name: Proprietary – All rights reserved
     url: 'https://chantillyapps.cl/legal'
   description: |
-    Contratos del MVP: Cotización → Aprobaciones (2C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
+    Contratos del MVP: Cotización → Aprobaciones (1C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
 servers:
   - url: 'https://proyectos-api.chantillyapps.cl'
     description: Producción
   - url: 'http://localhost:5087'
     description: Mock local (Prism)
 paths:
+  /v1/users:
+    get:
+      operationId: Users_List
+      summary: Listar usuarios Sispro
+      description: Retorna los usuarios vinculados a la plataforma Sisprod (platformId = 5).
+      tags: [Users]
+      parameters:
+        - name: q
+          in: query
+          description: Busqueda por nombre, email o username
+          schema: { type: string }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedSisproUsers'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        default: { $ref: '#/components/responses/Problem' }
+  /v1/users/{userId}:
+    get:
+      operationId: Users_Get
+      summary: Obtener usuario Sispro
+      description: Retorna el usuario si pertenece a la plataforma Sisprod (platformId = 5).
+      tags: [Users]
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SisproUser'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        default: { $ref: '#/components/responses/Problem' }
   /v1/catalog/products:
     get:
       operationId: Catalog_ListProducts
@@ -20,6 +60,11 @@ paths:
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
+        - name: codAux
+          in: query
+          description: Filtra por código de cliente (`CodAux`)
+          schema:
+            type: string
         - name: q
           in: query
           description: Búsqueda por código o descripción
@@ -539,6 +584,35 @@ paths:
           $ref: '#/components/responses/Problem'
       tags:
         - Quotes
+  '/v1/quotes/{quoteId}/discounts':
+    patch:
+      operationId: Quotes_UpdateDiscounts
+      summary: Actualizar descuentos de ítems (crea nueva versión)
+      description: Crea una nueva versión de la cotización con los descuentos actualizados.
+      tags: [Quotes]
+      parameters:
+        - $ref: '#/components/parameters/QuoteId'
+        - $ref: '#/components/parameters/XRequestId'
+        - $ref: '#/components/parameters/XCorrelationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuoteDiscountsPatch'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuoteVersionSummary'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/UnprocessableEntity' }
+        default: { $ref: '#/components/responses/Problem' }
   '/v1/quotes/{quoteId}/submit':
     post:
       operationId: Quotes_Submit
@@ -858,6 +932,12 @@ components:
       in: path
       required: true
       schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+      description: Identificador del usuario en Sisprod.
     IdempotencyKey:
       name: Idempotency-Key
       in: header
@@ -984,6 +1064,74 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Client'
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
+          type: integer
+      required:
+        - items
+        - page
+        - pageSize
+        - total
+    SisproUser:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userName:
+          type:
+            - string
+            - 'null'
+        email:
+          type:
+            - string
+            - 'null'
+          format: email
+        displayName:
+          type:
+            - string
+            - 'null'
+        firstName:
+          type:
+            - string
+            - 'null'
+        lastName:
+          type:
+            - string
+            - 'null'
+        phoneNumber:
+          type:
+            - string
+            - 'null'
+        emailConfirmed:
+          type: boolean
+        lockoutEnabled:
+          type: boolean
+        lockoutEnd:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        accessFailedCount:
+          type: integer
+        roles:
+          type: string
+      required:
+        - id
+        - emailConfirmed
+        - lockoutEnabled
+        - accessFailedCount
+        - roles
+    PagedSisproUsers:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/SisproUser'
         page:
           type: integer
         pageSize:
@@ -1556,6 +1704,34 @@ components:
         total:
           type: number
           format: double
+    QuoteDiscountPatchItem:
+      type: object
+      properties:
+        sku:
+          type: string
+        discountPercent:
+          type: number
+          format: double
+          minimum: 0
+          maximum: 100
+        discountAmount:
+          type: number
+          format: double
+          minimum: 0
+      required:
+        - sku
+        - discountPercent
+        - discountAmount
+    QuoteDiscountsPatch:
+      type: object
+      properties:
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QuoteDiscountPatchItem'
+      required:
+        - items
       required:
         - versionId
         - itemsCount
@@ -1576,7 +1752,6 @@ components:
           type: string
           enum:
             - commercial_1
-            - commercial_2
             - financial_1
         status:
           type: string
@@ -1722,17 +1897,42 @@ components:
             - string
             - 'null'
         roles:
-          type: array
-          items:
-            type: string
+          type: string
         scopes:
           type: array
           items:
             type: string
+        discountPolicy:
+          type: object
+          properties:
+            allowed:
+              type: boolean
+            maxPercent:
+              type: number
+              format: double
+          required:
+            - allowed
+            - maxPercent
+        pricelistPolicy:
+          type: object
+          properties:
+            default:
+              type:
+                - string
+                - 'null'
+            rollerDefault:
+              type:
+                - string
+                - 'null'
+          required:
+            - default
+            - rollerDefault
       required:
         - id
         - roles
         - scopes
+        - discountPolicy
+        - pricelistPolicy
   responses:
     Problem:
       description: Error
@@ -1793,13 +1993,15 @@ tags:
   - name: Quotes
     description: Creación y lectura de cotizaciones y sus versiones.
   - name: Approvals
-    description: Flujo de aprobaciones comercial y financiera (2C + 1F) sobre cotizaciones.
+    description: Flujo de aprobaciones comercial y financiera (1C + 1F) sobre cotizaciones.
   - name: Workflow
     description: Transiciones y guardias del workflow del proyecto.
   - name: SalesNotes
     description: Emisión y consulta de Notas de Venta (NV) derivadas de proyectos aprobados.
   - name: WorkOrders
     description: Emisión y consulta de Órdenes de Trabajo (OT) posteriores a NV.
+  - name: Users
+    description: Gestion de usuarios Sispro.
   - name: Identity
     description: Información del usuario autenticado.
 security:
