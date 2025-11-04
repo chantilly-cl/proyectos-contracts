@@ -1,227 +1,253 @@
 openapi: 3.1.0
 info:
   title: Proyectos Workflow API
-  version: 1.0.0-beta.1
+  version: 1.0.1
   license:
     name: Proprietary – All rights reserved
-    url: 'https://chantillyapps.cl/legal'
-  description: |
-    Contratos del MVP: Cotización → Aprobaciones (1C + 1F) → NV → OT. Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
+    url: https://chantillyapps.cl/legal
+  description: 'Contratos del MVP: Cotización → Aprobaciones (1C + 1F) → NV → OT.
+    Reglas: PriceList LOCK por proyecto; FREEZE de precios al aprobar cotización (PriceAgreement).
+
+
+
+    **Doc-only**: alineación de contrato con workflow, errores, idempotencia/concurrencia,
+    paginación/filtros, versionado/deprecación.'
+  x-changelog:
+  - version: 1.0.1
+    date: '2025-11-04'
+    type: doc-only
+    notes:
+    - Se documenta tabla de workflow (estados, transiciones, efectos, eventos).
+    - Se agrega taxonomía de errores con 'code', 'hint', 'canRetry', 'retryAfter'.
+    - Se normaliza uso de Idempotency-Key y If-Match (ETag) en operaciones sensibles.
+    - Se documenta política de consistencia, TTL y modo degradado ante ERP.
+    - Se clarifican límites de paginación/filtros/orden por recurso.
+    - Se publica política de versionado semver y deprecación con ventana mínima.
 servers:
-  - url: 'https://proyectos-api.chantillyapps.cl'
-    description: Producción
-  - url: 'http://localhost:5087'
-    description: Mock local (Prism)
+- url: https://proyectos-api.chantillyapps.cl
+  description: Producción
+- url: http://localhost:5087
+  description: Mock local (Prism)
 paths:
   /v1/users:
     get:
       operationId: Users_List
       summary: Listar usuarios Sispro
-      description: Retorna los usuarios vinculados a la plataforma Sisprod (platformId = 5).
-      tags: [Users]
+      description: Retorna los usuarios vinculados a la plataforma Sisprod (platformId
+        = 5).
+      tags:
+      - Users
       parameters:
-        - name: q
-          in: query
-          description: Busqueda por nombre, email o username
-          schema: { type: string }
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
+      - name: q
+        in: query
+        description: Búsqueda por nombre, email o username.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedSisproUsers'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        default: { $ref: '#/components/responses/Problem' }
+                $ref: '#/components/schemas/PagedApplicationUsers'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
   /v1/users/{userId}:
     get:
       operationId: Users_Get
       summary: Obtener usuario Sispro
-      description: Retorna el usuario si pertenece a la plataforma Sisprod (platformId = 5).
-      tags: [Users]
-      parameters:
-        - $ref: '#/components/parameters/UserId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SisproUser'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/catalog/products:
-    get:
-      operationId: Catalog_ListProducts
-      summary: Listar productos
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-        - name: codAux
-          in: query
-          description: Filtra por código de cliente (`CodAux`)
-          schema:
-            type: string
-        - name: q
-          in: query
-          description: Búsqueda por código o descripción
-          schema:
-            type: string
-        - name: active
-          in: query
-          description: Filtra por productos activos/inactivos
-          schema:
-            type: boolean
-            default: true
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PagedProducts'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        default:
-          $ref: '#/components/responses/Problem'
+      description: Retorna el detalle del usuario si pertenece a la plataforma Sisprod.
       tags:
-        - Catalog
-  /v1/catalog/products/{key}:
-    get:
-      operationId: Catalog_GetProduct
-      summary: Obtener producto por clave
+      - Users
       parameters:
-        - name: key
-          in: path
-          required: true
-          description: Clave o SKU del producto
-          schema:
-            type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Product'
+                $ref: '#/components/schemas/ApplicationUser'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/Problem'
+  /v1/projects/{projectId}/payment-policy:
+    patch:
+      operationId: Projects_UpdatePaymentPolicy
+      summary: Actualizar politica de pago del proyecto
       tags:
-        - Catalog
-  /v1/catalog/products/{key}/config:
-    get:
-      operationId: Catalog_GetProductConfig
-      summary: Obtener configuración del producto
+      - Projects
       parameters:
-        - name: key
-          in: path
-          required: true
-          description: Clave o SKU del producto
-          schema:
-            type: string
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductConfig'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Catalog
-  /me:
-    get:
-      operationId: Me_Get
-      summary: Obtener perfil del usuario autenticado
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/MeProfile'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Identity
-  /v1/price-lists:
-    get:
-      operationId: PriceLists_List
-      summary: Listar listas de precio
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PagedPriceLists'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - PriceLists
-  /v1/projects:
-    get:
-      operationId: Projects_List
-      summary: Listar proyectos
-      description: Listado paginado con filtros y ordenamiento.
-      tags: [Projects]
-      parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
-        - $ref: '#/components/parameters/Q'
-        - $ref: '#/components/parameters/ClientIdFilter'
-        - $ref: '#/components/parameters/ProjectState'
-        - $ref: '#/components/parameters/OrderBy'
-        - $ref: '#/components/parameters/SortDir'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PagedProjects' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        default: { $ref: '#/components/responses/Problem' }
-    post:
-      operationId: Projects_Create
-      summary: Crear proyecto (LOCK PriceList)
-      description: Crea el proyecto con PriceList asignado y bloqueado.
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      - $ref: '#/components/parameters/If-Match'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ProjectCreateRequest'
+              $ref: '#/components/schemas/UpdateProjectPaymentPolicyRequest'
+      responses:
+        '204':
+          description: Actualizado
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed412'
+  /v1/projects/{projectId}/quote:
+    post:
+      operationId: ProjectQuotes_CreateVersion
+      summary: Crear nueva version de cotizacion para un proyecto
+      tags:
+      - Projects
+      - Quotes
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateQuoteVersionForProjectRequest'
       responses:
         '201':
           description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateQuoteVersionForProjectResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/quote:
+    post:
+      operationId: Projects_CreateWithQuote
+      summary: Crear proyecto con cotizacion inicial detallada
+      tags:
+      - Projects
+      - Quotes
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateProjectWithQuoteRequest'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateProjectWithQuoteResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/submit-approval:
+    post:
+      operationId: Projects_SubmitForApproval
+      summary: Enviar proyecto a aprobacion
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SubmitProjectForApprovalResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/workflow/transition:
+    post:
+      operationId: Workflow_Transition
+      summary: Hacer transicion de estado
+      tags:
+      - Workflow
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTransitionRequest'
+      responses:
+        '200':
+          description: OK
           content:
             application/json:
               schema:
@@ -230,200 +256,26 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
-          description: Conflicto (violación de regla de negocio)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
-  /v1/projects+quotes:
-    post:
-      operationId: ProjectsQuotes_Create
-      summary: Crear proyecto y cotización inicial (draft)
-      description: |
-        Crea un proyecto en estado `draft` y su cotización inicial también en `draft`
-        de manera atómica. Requiere `Idempotency-Key`.
-      tags: [Projects, Quotes]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProjectWithQuoteCreateRequest'
-      responses:
-        '201':
-          description: Creado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectWithQuote'
-        '200':
-          description: Reintento idempotente
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProjectWithQuote'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/projects/{projectId}/price-list/assign:
-    post:
-      operationId: Projects_AssignPriceList
-      summary: Asignar PriceList a proyecto
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AssignPriceListRequest'
-      responses:
-        '200':
-          description: OK
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
-  /v1/projects/{projectId}/price-list/override:
-    post:
-      operationId: Projects_OverridePriceList
-      summary: Sobrescribir PriceList de proyecto
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/OverridePriceListRequest'
-      responses:
-        '200':
-          description: OK
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
-  '/v1/projects/{projectId}':
-    get:
-      operationId: Projects_Get
-      summary: Obtener proyecto
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: OK
-          headers:
-            ETag: { $ref: '#/components/headers/ETag' }
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Project' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
-      tags: [Projects]
-    patch:
-      operationId: Projects_Patch
-      summary: Actualizar datos del proyecto (concurrencia por ETag)
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-        - $ref: '#/components/parameters/IfMatch'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/ProjectPatchRequest' }
-      responses:
-        '204': { description: Actualizado }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '412':
-          description: Precondition Failed (If-Match / ETag no coincide)
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/ProblemDetails' }
-        default: { $ref: '#/components/responses/Problem' }
-      tags: [Projects]
-  /v1/projects/{projectId}/quotes:
-    post:
-      operationId: ProjectQuotes_Create
-      summary: Crear cotización (draft) para un proyecto
-      description: |
-        Crea una cotización **versión 1** en estado `draft` para el `projectId` dado.
-        Soporta **descuentos por ítem** y **descuento global** (XOR entre % y monto).
-        Usa la PriceList **LOCK** del proyecto para resolver precios si `unitPrice` no se provee.
-      tags: [Quotes, Projects]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProjectQuoteCreateRequest'   # ⬅️ NUEVO
-      responses:
-        '201':
-          description: Creado
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Quote'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-  '/v1/projects/{projectId}/price-agreement':
-    get:
-      operationId: Projects_GetPriceAgreement
-      summary: Ver acuerdo de precios FREEZE
-      parameters:
-        - $ref: '#/components/parameters/ProjectId'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/PriceAgreement'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Projects
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
   /v1/projects/{projectId}/approvals:
     get:
       operationId: Approvals_ListByProject
       summary: Listar aprobaciones de un proyecto
+      tags:
+      - Approvals
       parameters:
-        - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ProjectId'
       responses:
         '200':
           description: OK
@@ -437,20 +289,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Approvals
-  '/v1/projects/{projectId}/approvals/{approvalId}':
+  /v1/projects/{projectId}/approvals/{approvalId}:
     get:
       operationId: Approvals_GetByProject
-      summary: Obtener aprobación de proyecto
+      summary: Obtener aprobacion de proyecto
+      tags:
+      - Approvals
       parameters:
-        - $ref: '#/components/parameters/ProjectId'
-        - name: approvalId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ApprovalId'
       responses:
         '200':
           description: OK
@@ -464,15 +311,15 @@ paths:
           $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Approvals
   /v1/projects/{projectId}/approvals/commercial:
     post:
       operationId: Approvals_ApproveCommercial
-      summary: Registrar aprobación comercial
+      summary: Registrar aprobacion comercial
+      tags:
+      - Approvals
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
         content:
@@ -492,17 +339,23 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Approvals
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
   /v1/projects/{projectId}/approvals/financial:
     post:
       operationId: Approvals_ApproveFinancial
-      summary: Registrar aprobación financiera
+      summary: Registrar aprobacion financiera
+      tags:
+      - Approvals
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
         content:
@@ -522,18 +375,124 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/approvals/{approvalId}/decision:
+    post:
+      operationId: Approvals_Decide
+      summary: Aprobar o rechazar aprobacion pendiente
       tags:
-        - Approvals
+      - Approvals
+      parameters:
+      - $ref: '#/components/parameters/ApprovalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalDecision'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Approval'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/sales-notes:
+    post:
+      operationId: SalesNotes_Create
+      summary: Emitir Nota de Venta (NV)
+      tags:
+      - SalesNotes
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SalesNoteCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/work-orders:
+    post:
+      operationId: WorkOrders_Create
+      summary: Emitir Orden de Trabajo (OT)
+      tags:
+      - WorkOrders
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKeyRequired'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkOrderCreated'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
   /v1/quotes:
     post:
       operationId: Quotes_Create
-      summary: Crear cotización (versión 1)
+      summary: Crear cotizacion (version 1)
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
         content:
@@ -553,18 +512,24 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+        '409':
+          $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Quotes
-  '/v1/quotes/{quoteId}':
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/quotes/{quoteId}:
     get:
       operationId: Quotes_Get
-      summary: Obtener cotización
+      summary: Obtener cotizacion
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/QuoteId'
       responses:
         '200':
           description: OK
@@ -576,30 +541,24 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Quotes
-  '/v1/quotes/{quoteId}/discounts':
+  /v1/quotes/{quoteId}/discounts:
     patch:
       operationId: Quotes_UpdateDiscounts
-      summary: Actualizar descuentos de ítems (crea nueva versión)
-      description: Crea una nueva versión de la cotización con los descuentos actualizados.
-      tags: [Quotes]
+      summary: Actualizar descuentos de items (crea nueva version)
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/QuoteId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      - $ref: '#/components/parameters/If-Match'
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/QuoteDiscountsPatch'
+              $ref: '#/components/schemas/QuoteDiscountPatch'
       responses:
         '200':
           description: OK
@@ -607,45 +566,123 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuoteVersionSummary'
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-  '/v1/quotes/{quoteId}/submit':
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed412'
+  /v1/quotes/{quoteId}/submit:
     post:
       operationId: Quotes_Submit
-      summary: Enviar a aprobación (genera versión)
+      summary: Enviar cotizacion a aprobacion
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/QuoteId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/Idempotency-Key'
       responses:
         '202':
-          description: Enviado a approvals
+          description: Enviado a aprobaciones
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Quote'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/quotes/{quoteId}/send-email:
+    post:
+      operationId: Quotes_SendEmail
+      summary: Enviar cotizacion por email (idempotente)
       tags:
-        - Quotes
+      - Quotes
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      responses:
+        '202':
+          description: Envio encolado/aceptado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/quotes/{quoteId}/pdf:
+    get:
+      operationId: Quotes_GetPdf
+      summary: Obtener PDF de la cotizacion
+      tags:
+      - Quotes
+      parameters:
+      - $ref: '#/components/parameters/QuoteId'
+      - name: download
+        in: query
+        schema:
+          type: boolean
+          default: false
+      responses:
+        '200':
+          description: OK
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
   /v1/quotes/{quoteId}/items:
     post:
       operationId: QuoteItems_Add
-      summary: Agregar ítem a cotización
+      summary: Agregar item a cotizacion
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
         content:
@@ -659,31 +696,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuoteVersionSummary'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Quotes
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
   /v1/quotes/{quoteId}/items/bulk:
     post:
       operationId: QuoteItems_AddBulk
-      summary: Agregar ítems masivamente a cotización
+      summary: Agregar items masivamente a cotizacion
+      tags:
+      - Quotes
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/QuoteId'
+      - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: array
+              minItems: 1
               items:
                 $ref: '#/components/schemas/QuoteItemCreate'
       responses:
@@ -693,127 +738,637 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/QuoteVersionSummary'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - Quotes
-  /v1/quotes/{quoteId}/send-email:
-    post:
-      operationId: Quotes_SendEmail
-      summary: Enviar cotización por email (idempotente)
-      description: |
-        Envía la cotización al email del cliente del proyecto.
-        Si la cotización estaba en `draft`, pasa a `sent`.
-        Reintentos con la misma **Idempotency-Key** no duplican el envío.
-      tags: [Quotes]
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/QuoteId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-      responses:
-        '202':
-          description: Envío encolado/aceptado
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  ok: { type: boolean, example: true }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/Conflict' }
-        '422': { $ref: '#/components/responses/UnprocessableEntity' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/quotes/{quoteId}/pdf:
-    get:
-      operationId: Quotes_GetPdf
-      summary: Obtener PDF de la cotización
-      description: Devuelve el PDF; usar `?download=true` para forzar descarga.
-      tags: [Quotes]
-      parameters:
-        - $ref: '#/components/parameters/QuoteId'
-        - name: download
-          in: query
-          schema: { type: boolean, default: false }
-      responses:
-        '200':
-          description: OK
-          content:
-            application/pdf:
-              schema:
-                type: string
-                format: binary
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
-  '/v1/approvals/{approvalId}/decision':
-    post:
-      operationId: Approvals_Decide
-      summary: 'Aprobar/Rechazar paso (C1, C2, F1)'
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-        - name: approvalId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApprovalDecision'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Approval'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
+        '404':
+          $ref: '#/components/responses/NotFound'
         default:
           $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/auth/debug/whoami:
+    get:
+      operationId: AuthDebug_WhoAmI
+      summary: Información del usuario autenticado (debug)
+      description: Endpoint de depuración que retorna los claims del token.
       tags:
-        - Approvals
-  '/v1/projects/{projectId}/workflow/transition':
-    post:
-      operationId: Workflow_Transition
-      summary: Hacer transición de estado (con guardias)
+      - Identity
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthDebugWhoAmIResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/catalog/products:
+    get:
+      operationId: Catalog_ListProducts
+      summary: Listar productos
+      tags:
+      - Catalog
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - name: q
+        in: query
+        description: Búsqueda por código o descripción.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: active
+        in: query
+        description: Filtra por productos activos/inactivos.
+        schema:
+          type: boolean
+          default: true
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCatalogProducts'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/catalog/products/{key}:
+    get:
+      operationId: Catalog_GetProduct
+      summary: Obtener producto por clave
+      tags:
+      - Catalog
+      parameters:
+      - name: key
+        in: path
+        required: true
+        description: Clave o SKU del producto.
+        schema:
+          type: string
+      - name: priceList
+        in: query
+        required: true
+        description: Lista de precio a utilizar para la resolución de precios.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Product'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/catalog/products/{key}/config:
+    get:
+      operationId: Catalog_GetProductConfig
+      summary: Obtener configuración del producto
+      tags:
+      - Catalog
+      parameters:
+      - name: key
+        in: path
+        required: true
+        description: Clave o SKU del producto.
+        schema:
+          type: string
+      - name: priceList
+        in: query
+        required: true
+        description: Lista de precio a utilizar para la resolución de precios.
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductConfig'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/clients:
+    get:
+      operationId: Clients_List
+      summary: Listar clientes
+      description: Filtra clientes por texto y respeta las políticas de visibilidad
+        según rol.
+      tags:
+      - Clients
+      parameters:
+      - name: q
+        in: query
+        description: Búsqueda por nombre/RUT/email.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedClients'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: Clients_Create
+      summary: Crear cliente
+      tags:
+      - Clients
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/WorkflowTransitionRequest'
+              $ref: '#/components/schemas/ClientCreateRequest'
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+      parameters:
+      - $ref: '#/components/parameters/Idempotency-Key'
+  /v1/clients/{clientId}:
+    get:
+      operationId: Clients_Get
+      summary: Obtener cliente
+      tags:
+      - Clients
+      parameters:
+      - name: clientId
+        in: path
+        required: true
+        description: Código del cliente (CodAux).
+        schema:
+          type: string
       responses:
         '200':
           description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Client'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/regiones:
+    get:
+      operationId: Regions_List
+      summary: Listar regiones
+      tags:
+      - Catalog
+      parameters:
+      - name: q
+        in: query
+        description: Filtro por descripción.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedRegions'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/regiones/{regionId}:
+    get:
+      operationId: Regions_Get
+      summary: Obtener región
+      tags:
+      - Catalog
+      parameters:
+      - name: regionId
+        in: path
+        required: true
+        schema:
+          type: integer
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Region'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/provincias:
+    get:
+      operationId: Provinces_List
+      summary: Listar provincias
+      tags:
+      - Catalog
+      parameters:
+      - name: q
+        in: query
+        description: Filtro por descripción.
+        schema:
+          type: string
+      - name: regionId
+        in: query
+        description: Filtrar por región.
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedProvinces'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/provincias/{provinciaId}:
+    get:
+      operationId: Provinces_Get
+      summary: Obtener provincia
+      tags:
+      - Catalog
+      parameters:
+      - name: provinciaId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Province'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/ciudades:
+    get:
+      operationId: Cities_List
+      summary: Listar ciudades
+      tags:
+      - Catalog
+      parameters:
+      - name: q
+        in: query
+        description: Filtro por descripción.
+        schema:
+          type: string
+      - name: regionId
+        in: query
+        description: Filtrar por región.
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCities'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/ciudades/{ciudadId}:
+    get:
+      operationId: Cities_Get
+      summary: Obtener ciudad
+      tags:
+      - Catalog
+      parameters:
+      - name: ciudadId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/City'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/comunas:
+    get:
+      operationId: Communes_List
+      summary: Listar comunas
+      tags:
+      - Catalog
+      parameters:
+      - name: q
+        in: query
+        description: Filtro por descripción.
+        schema:
+          type: string
+      - name: regionId
+        in: query
+        description: Filtrar por región.
+        schema:
+          type: integer
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedCommunes'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/comunas/{comunaId}:
+    get:
+      operationId: Communes_Get
+      summary: Obtener comuna
+      tags:
+      - Catalog
+      parameters:
+      - name: comunaId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Commune'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/giros:
+    get:
+      operationId: Giros_List
+      summary: Listar giros
+      tags:
+      - Catalog
+      parameters:
+      - name: q
+        in: query
+        description: Filtro por descripción.
+        schema:
+          type: string
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedGiros'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/delivery-methods:
+    get:
+      operationId: DeliveryMethods_List
+      summary: Obtener métodos de entrega activos
+      tags:
+      - Catalog
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeliveryMethodListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/payment-methods:
+    get:
+      operationId: PaymentMethods_List
+      summary: Obtener métodos de pago activos
+      tags:
+      - Catalog
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentMethodListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /me:
+    get:
+      operationId: Me_Get
+      summary: Obtener perfil del usuario autenticado
+      tags:
+      - Identity
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeProfile'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/price-lists:
+    get:
+      operationId: PriceLists_List
+      summary: Listar listas de precio
+      tags:
+      - PriceLists
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: codAux
+        in: query
+        description: Código de cliente para filtrar (CodAux).
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedPriceLists'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/projects:
+    get:
+      operationId: Projects_List
+      summary: Listar proyectos
+      description: Listado paginado con filtros y ordenamiento; usar `view=rich` para
+        la versión enriquecida.
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/Page'
+      - $ref: '#/components/parameters/PageSize'
+      - name: q
+        in: query
+        description: Busca por código de proyecto o cliente.
+        schema:
+          type: string
+          maxLength: 120
+      - name: clientId
+        in: query
+        description: Filtra por cliente.
+        schema:
+          type: string
+          format: uuid
+      - name: state
+        in: query
+        description: Filtra por estado del workflow.
+        schema:
+          $ref: '#/components/schemas/WorkflowState'
+      - name: orderBy
+        in: query
+        description: Campo de ordenamiento.
+        schema:
+          type: string
+          enum:
+          - createdAt
+          - updatedAt
+          - code
+      - name: sort
+        in: query
+        description: Dirección del ordenamiento.
+        schema:
+          type: string
+          enum:
+          - asc
+          - desc
+          default: desc
+      - name: view
+        in: query
+        description: Cuando es `rich`, retorna información enriquecida (detalle).
+        schema:
+          type: string
+          enum:
+          - rich
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                oneOf:
+                - $ref: '#/components/schemas/PagedProjectsBasic'
+                - $ref: '#/components/schemas/PagedProjectsRich'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        default:
+          $ref: '#/components/responses/Problem'
+    post:
+      operationId: Projects_Create
+      summary: Crear proyecto
+      description: Crea el proyecto con PriceList asignado y bloqueado.
+      tags:
+      - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: Creado
           content:
             application/json:
               schema:
@@ -823,129 +1378,322 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '409':
-          description: Guard failed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
+          $ref: '#/components/responses/Conflict'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - Workflow
-  '/v1/projects/{projectId}/sales-notes':
-    post:
-      operationId: SalesNotes_Create
-      summary: Emitir Nota de Venta (NV)
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+  /v1/projects+quotes:
+    post:
+      operationId: ProjectsQuotes_Create
+      summary: Crear proyecto y cotización inicial (draft)
+      description: Crea un proyecto en estado `draft` y su cotización inicial también
+        en `draft` de manera atómica.
+      tags:
+      - Projects
+      - Quotes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectWithQuoteCreateRequest'
       responses:
         '201':
-          description: Creada
+          description: Creado
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SalesNote'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: '#/components/schemas/ProjectWithQuote'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
         default:
           $ref: '#/components/responses/Problem'
-      tags:
-        - SalesNotes
-  '/v1/projects/{projectId}/work-orders':
-    post:
-      operationId: WorkOrders_Create
-      summary: Emitir Orden de Trabajo (OT)
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
       parameters:
-        - $ref: '#/components/parameters/IdempotencyKey'
-        - $ref: '#/components/parameters/ProjectId'
-        - $ref: '#/components/parameters/XRequestId'
-        - $ref: '#/components/parameters/XCorrelationId'
-      responses:
-        '201':
-          description: Creada
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/WorkOrder'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '409':
-          $ref: '#/components/responses/Conflict'
-        '422':
-          $ref: '#/components/responses/UnprocessableEntity'
-        default:
-          $ref: '#/components/responses/Problem'
-      tags:
-        - WorkOrders
-  /v1/clients:
+      - $ref: '#/components/parameters/Idempotency-Key'
+  /v1/projects/{projectId}:
     get:
-      operationId: Clients_List
-      summary: Listar clientes (selector)
-      tags: [Clients]
+      operationId: Projects_Get
+      summary: Obtener proyecto
+      tags:
+      - Projects
       parameters:
-        - name: q
-          in: query
-          description: Búsqueda por nombre/RUT/email
-          schema: { type: string }
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/PageSize'
+      - $ref: '#/components/parameters/ProjectId'
+      responses:
+        '200':
+          description: OK
+          headers:
+            ETag:
+              $ref: '#/components/headers/ETag'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectListRich'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+    patch:
+      operationId: Projects_Patch
+      summary: Actualizar datos del proyecto (concurrencia por ETag)
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IfMatch'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectPatch'
+      responses:
+        '204':
+          description: Actualizado
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/send-email:
+    post:
+      operationId: Projects_SendEmail
+      summary: Enviar resumen del proyecto por correo
+      description: 'Envía un correo asociado al proyecto. Si la cotización estaba
+        en `draft`, pasa a `sent`.
+
+        '
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectSendEmailRequest'
+      responses:
+        '202':
+          description: Envío aceptado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
+        default:
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/price-agreement:
+    get:
+      operationId: Projects_GetPriceAgreement
+      summary: Ver acuerdo de precios FREEZE
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
       responses:
         '200':
           description: OK
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PagedClients'
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        default: { $ref: '#/components/responses/Problem' }
-  /v1/clients/{clientId}:
-    get:
-      operationId: Clients_Get
-      summary: Obtener cliente
-      tags: [Clients]
+                $ref: '#/components/schemas/PriceAgreement'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+  /v1/projects/{projectId}/price-list/assign:
+    post:
+      operationId: Projects_AssignPriceList
+      summary: Asignar PriceList a proyecto
+      tags:
+      - Projects
       parameters:
-        - $ref: '#/components/parameters/ClientId'
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AssignPriceListRequest'
       responses:
         '200':
           description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Client' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '404': { $ref: '#/components/responses/NotFound' }
-        default: { $ref: '#/components/responses/Problem' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/price-list/override:
+    post:
+      operationId: Projects_OverridePriceList
+      summary: Sobrescribir PriceList de proyecto
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OverridePriceListRequest'
+      responses:
+        '200':
+          description: OK
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+  /v1/projects/{projectId}/delivery-method:
+    put:
+      operationId: Projects_UpdateDeliveryMethod
+      summary: Actualizar método de entrega del proyecto
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectDeliveryMethodRequest'
+      responses:
+        '204':
+          description: Actualizado
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed412'
+  /v1/projects/{projectId}/payment-method:
+    put:
+      operationId: Projects_UpdatePaymentMethod
+      summary: Actualizar metodo de pago del proyecto
+      tags:
+      - Projects
+      parameters:
+      - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/Idempotency-Key'
+      - $ref: '#/components/parameters/If-Match'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProjectPaymentMethodRequest'
+      responses:
+        '204':
+          description: Actualizado
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        default:
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem422'
+        '409':
+          $ref: '#/components/responses/Conflict409'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable503'
+        '429':
+          $ref: '#/components/responses/TooManyRequests429'
+        '412':
+          $ref: '#/components/responses/PreconditionFailed412'
 components:
   parameters:
-    ClientId:
-      name: clientId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-    UserId:
-      name: userId
-      in: path
-      required: true
-      schema: { type: string, format: uuid }
-      description: Identificador del usuario en Sisprod.
-    IdempotencyKey:
-      name: Idempotency-Key
-      in: header
-      required: true
-      schema:
-        type: string
-        maxLength: 64
-      description: Clave idempotente por operación de escritura.
     Page:
       name: page
       in: query
@@ -958,9 +1706,9 @@ components:
       in: query
       schema:
         type: integer
-        default: 50
-        maximum: 200
+        default: 20
         minimum: 1
+        maximum: 100
     ProjectId:
       name: projectId
       in: path
@@ -975,174 +1723,169 @@ components:
       schema:
         type: string
         format: uuid
-    XCorrelationId:
-      name: X-Correlation-Id
+    ApprovalId:
+      name: approvalId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
       in: header
       required: false
       schema:
         type: string
         maxLength: 64
-      description: ID de correlación devuelto/encadenado por los servicios.
-    XRequestId:
-      name: X-Request-Id
+      description: Clave idempotente opcional para operaciones sensibles.
+    IdempotencyKeyRequired:
+      name: Idempotency-Key
       in: header
-      required: false
+      required: true
       schema:
         type: string
         maxLength: 64
-      description: ID generado por el cliente para trazar la petición extremo a extremo.
-    Q:
-      name: q
-      in: query
-      description: Busca por código de proyecto o nombre/RUT/email del cliente
-      schema: { type: string, maxLength: 120 }
-    ProjectState:
-      name: state
-      in: query
-      description: Filtra por estado del workflow
-      schema: { $ref: '#/components/schemas/WorkflowState' }
-    ClientIdFilter:
-      name: clientId
-      in: query
-      description: Filtra por cliente
-      schema: { type: string, format: uuid }
-    OrderBy:
-      name: orderBy
-      in: query
-      description: Campo de orden default = createdAt DESC)
-      schema: { type: string, enum: [createdAt, updatedAt, code] }
-    SortDir:
-      name: sort
-      in: query
-      description: Dirección de orden
-      schema: { type: string, enum: [asc, desc], default: desc }
+      description: Clave idempotente requerida para evitar duplicados.
     IfMatch:
       name: If-Match
       in: header
       required: true
       description: ETag para concurrencia optimista (responde 412 si no coincide).
-      schema: { type: string, maxLength: 120 }
+      schema:
+        type: string
+        maxLength: 120
+    Idempotency-Key:
+      name: Idempotency-Key
+      in: header
+      required: false
+      description: Clave idempotente para operaciones de creación/acción. Ventana
+        sugerida 24h.
+      schema:
+        type: string
+        maxLength: 128
+    If-Match:
+      name: If-Match
+      in: header
+      required: false
+      description: ETag del recurso para control de concurrencia optimista.
+      schema:
+        type: string
+    page:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+      description: Número de página (>=1)
+    pageSize:
+      name: pageSize
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+      description: Tamaño de página (1..100)
+    sort:
+      name: sort
+      in: query
+      schema:
+        type: string
+      description: Campos permitidos separados por coma. `-campo` = descendente.
   headers:
     ETag:
       description: Validador de entidad (weak ETag recomendado = W/"<hash>")
-      schema: { type: string }
+      schema:
+        type: string
+    Retry-After:
+      description: Número de segundos a esperar antes de reintentar.
+      schema:
+        type: integer
+        minimum: 0
+  responses:
+    BadRequest:
+      description: Solicitud invalida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Unauthorized:
+      description: No autenticado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: No encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict:
+      description: Conflicto o regla de negocio
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    UnprocessableEntity:
+      description: Error semantico
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PreconditionFailed:
+      description: Precondicion fallida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Problem:
+      description: Error inesperado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Problem422:
+      description: Unprocessable Entity (validación)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    Conflict409:
+      description: Conflicto (estado/versión)
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/Retry-After'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    PreconditionFailed412:
+      description: Precondition Failed (If-Match/ETag)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    ServiceUnavailable503:
+      description: Servicio dependiente no disponible (ERP)
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/Retry-After'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    TooManyRequests429:
+      description: Límite de tasa excedido
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/Retry-After'
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
   schemas:
-    Client:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        email:
-          type:
-            - string
-            - 'null'
-          format: email
-        rut:
-          type:
-            - string
-            - 'null'
-        phones:
-          type:
-            - array
-            - 'null'
-          items:
-            type: string
-        billingAddress:
-          type:
-            - string
-            - 'null'
-      required:
-        - id
-        - name
-    PagedClients:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/Client'
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        total:
-          type: integer
-      required:
-        - items
-        - page
-        - pageSize
-        - total
-    SisproUser:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        userName:
-          type:
-            - string
-            - 'null'
-        email:
-          type:
-            - string
-            - 'null'
-          format: email
-        displayName:
-          type:
-            - string
-            - 'null'
-        firstName:
-          type:
-            - string
-            - 'null'
-        lastName:
-          type:
-            - string
-            - 'null'
-        phoneNumber:
-          type:
-            - string
-            - 'null'
-        emailConfirmed:
-          type: boolean
-        lockoutEnabled:
-          type: boolean
-        lockoutEnd:
-          type:
-            - string
-            - 'null'
-          format: date-time
-        accessFailedCount:
-          type: integer
-        roles:
-          type: string
-      required:
-        - id
-        - emailConfirmed
-        - lockoutEnabled
-        - accessFailedCount
-        - roles
-    PagedSisproUsers:
-      type: object
-      properties:
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/SisproUser'
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        total:
-          type: integer
-      required:
-        - items
-        - page
-        - pageSize
-        - total
     ProblemDetails:
       type: object
       properties:
@@ -1163,42 +1906,108 @@ components:
             items:
               type: string
       required:
-        - title
-        - status
-    ProjectListItem:
+      - title
+      - status
+    AcceptedResponse:
       type: object
       properties:
-        id: { type: string, format: uuid }
-        code: { type: string }
-        clientId: { type: string, format: uuid }
-        workflowState: { $ref: '#/components/schemas/WorkflowState' }
-        createdAt: { type: string, format: date-time }
-        updatedAt:
-          type: [string, 'null']
-          format: date-time
-      required: [id, code, clientId, workflowState, createdAt]
-    PagedProjects:
+        ok:
+          type: boolean
+          example: true
+      required:
+      - ok
+    PagedResult:
       type: object
       properties:
         items:
           type: array
-          items: { $ref: '#/components/schemas/ProjectListItem' }
-        page: { type: integer }
-        pageSize: { type: integer }
-        total: { type: integer }
-      required: [items, page, pageSize, total]
-    Money:
-      type: object
-      properties:
-        currency:
-          type: string
-          example: CLP
-        amount:
-          description: Monto en enteros (céntimos o pesos)
+          items: {}
+        page:
+          type: integer
+        pageSize:
+          type: integer
+        total:
           type: integer
       required:
-        - currency
-        - amount
+      - items
+      - page
+      - pageSize
+      - total
+    ApplicationUser:
+      type: object
+      properties:
+        id:
+          type: string
+        userName:
+          type:
+          - string
+          - 'null'
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+        displayName:
+          type:
+          - string
+          - 'null'
+        firstName:
+          type:
+          - string
+          - 'null'
+        lastName:
+          type:
+          - string
+          - 'null'
+        phoneNumber:
+          type:
+          - string
+          - 'null'
+        emailConfirmed:
+          type: boolean
+        lockoutEnabled:
+          type: boolean
+        lockoutEnd:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        accessFailedCount:
+          type: integer
+        roles:
+          type: string
+      required:
+      - id
+      - emailConfirmed
+      - lockoutEnabled
+      - accessFailedCount
+      - roles
+    PagedApplicationUsers:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ApplicationUser'
+    ProductSimpleListItem:
+      type: object
+      properties:
+        id:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string
+        uom:
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - sku
+      - name
     Product:
       type: object
       properties:
@@ -1206,20 +2015,20 @@ components:
           type: string
         title:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
         description:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
         codUmed:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
         inventariable:
           type:
-            - integer
-            - 'null'
+          - integer
+          - 'null'
         price:
           type: number
           format: double
@@ -1241,98 +2050,458 @@ components:
         margen:
           type: number
           format: double
+        ventaVerde:
+          type: boolean
       required:
-        - sku
-        - price
-        - compareAtPrice
-        - discount
-        - discountedAmount
-        - stock
-        - costoPromedio
-        - margen
-    ProductListItem:
+      - sku
+      - price
+      - compareAtPrice
+      - discount
+      - discountedAmount
+      - stock
+      - costoPromedio
+      - margen
+      - ventaVerde
+    ProductEnumItem:
+      type: object
+      properties:
+        id:
+          type: string
+        descripcion:
+          type: string
+        factor:
+          type:
+          - number
+          - 'null'
+      required:
+      - id
+      - descripcion
+    ProductTela:
+      type: object
+      properties:
+        sku:
+          type: string
+        descripcion:
+          type: string
+        precio:
+          type: number
+          format: double
+        tipo:
+          type:
+          - string
+          - 'null'
+        categoria:
+          type:
+          - string
+          - 'null'
+      required:
+      - sku
+      - descripcion
+      - precio
+    ProductAccionamiento:
+      type: object
+      properties:
+        id:
+          type: string
+        descripcion:
+          type: string
+        skuMotor:
+          type: string
+        precioMotor:
+          type: number
+          format: double
+        skuControl:
+          type: string
+        precioControl:
+          type: number
+          format: double
+      required:
+      - id
+      - descripcion
+      - skuMotor
+      - precioMotor
+      - skuControl
+      - precioControl
+    ProductComponente:
       type: object
       properties:
         id:
           type: string
         sku:
           type: string
-        name:
+        descripcion:
           type: string
-        uom:
-          type:
-            - string
-            - 'null'
+        precio:
+          type: number
+          format: double
       required:
-        - id
-        - sku
-        - name
-    PagedProducts:
+      - id
+      - sku
+      - descripcion
+      - precio
+    ProductEnums:
       type: object
       properties:
-        items:
-          type: array
+        tipos:
+          type:
+          - array
+          - 'null'
           items:
-            $ref: '#/components/schemas/ProductListItem'
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        total:
-          type: integer
-      required:
-        - items
-        - page
-        - pageSize
-        - total
+            $ref: '#/components/schemas/ProductEnumItem'
+        categorias:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        accionamientos:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        confecciones:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        caidaTela:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        colorAccesorio:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        tipoInstalacion:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        instalacionCortina:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        posicionMando:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        tipoCortina:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+        posicionMandoMadera:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductEnumItem'
+    ProductCatalog:
+      type: object
+      properties:
+        telas:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductTela'
+        lamas:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductTela'
+        accionamientos:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductAccionamiento'
+        componentes:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/ProductComponente'
     ProductConfig:
       type: object
       properties:
-        key:
+        productKey:
           type: string
-        name:
+        priceUnit:
           type: string
-        unit:
+        enums:
           type:
-            - string
-            - 'null'
-        options:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProductOptionDefinition'
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/ProductEnums'
+        catalog:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/ProductCatalog'
       required:
-        - key
-        - name
-        - options
-    ProductOptionDefinition:
+      - productKey
+      - priceUnit
+    PagedCatalogProducts:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProductSimpleListItem'
+    Client:
       type: object
       properties:
-        key:
+        codAux:
           type: string
-        displayName:
-          type: string
-        type:
-          type: string
-        values:
-          type: array
-          items:
-            $ref: '#/components/schemas/ProductOptionValue'
+        nomAux:
+          type:
+          - string
+          - 'null'
+        eMail:
+          type:
+          - string
+          - 'null'
+          format: email
+        rutAux:
+          type:
+          - string
+          - 'null'
+        fonAux1:
+          type:
+          - string
+          - 'null'
+        dirAux:
+          type:
+          - string
+          - 'null'
       required:
-        - key
-        - displayName
-        - type
-        - values
-    ProductOptionValue:
+      - codAux
+    ClientCreateRequest:
       type: object
       properties:
-        key:
+        codAux:
           type: string
-        displayName:
+          minLength: 1
+          maxLength: 10
+        nomAux:
           type: string
+          maxLength: 60
+        noFAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 60
+        rutAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 20
+        girAux:
+          type: string
+          maxLength: 3
+        comAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 7
+        ciuAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 7
+        provAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 5
+        region:
+          type:
+          - integer
+          - 'null'
+        paiAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 3
+        dirAux:
+          type:
+          - string
+          - 'null'
+          maxLength: 60
+        dirNum:
+          type:
+          - string
+          - 'null'
+          maxLength: 10
+        fonAux1:
+          type:
+          - string
+          - 'null'
+          maxLength: 15
+        claCli:
+          type: string
+          pattern: ^(S|N)$
+        claPro:
+          type: string
+          pattern: ^(S|N)$
+        eMail:
+          type:
+          - string
+          - 'null'
+          format: email
+          maxLength: 250
       required:
-        - key
-        - displayName
-    PriceList:
+      - codAux
+      - nomAux
+      - girAux
+      - claCli
+      - claPro
+    PagedClients:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Client'
+    Region:
+      type: object
+      properties:
+        regId:
+          type: integer
+        regDes:
+          type:
+          - string
+          - 'null'
+      required:
+      - regId
+    Province:
+      type: object
+      properties:
+        provCod:
+          type: string
+        provDes:
+          type:
+          - string
+          - 'null'
+        region:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/Region'
+      required:
+      - provCod
+    City:
+      type: object
+      properties:
+        ciudadCod:
+          type: string
+        ciudadDes:
+          type:
+          - string
+          - 'null'
+        region:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/Region'
+      required:
+      - ciudadCod
+    Commune:
+      type: object
+      properties:
+        comCod:
+          type: string
+        comDes:
+          type:
+          - string
+          - 'null'
+        region:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/Region'
+      required:
+      - comCod
+    Giro:
+      type: object
+      properties:
+        girCod:
+          type: string
+        girDes:
+          type:
+          - string
+          - 'null'
+      required:
+      - girCod
+    PagedRegions:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Region'
+    PagedProvinces:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Province'
+    PagedCities:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/City'
+    PagedCommunes:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Commune'
+    PagedGiros:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/Giro'
+    DeliveryMethod:
       type: object
       properties:
         id:
@@ -1342,65 +2511,143 @@ components:
           type: string
         name:
           type: string
-        active:
+        isStore:
           type: boolean
-        source:
-          type: string
-        currency:
-          type: string
-          description: Moneda base de la lista de precio
-          example: CLP
-        factor:
-          type: number
-          format: double
-          description: Factor multiplicador aplicado al precio base
       required:
-        - id
-        - key
-        - name
-        - active
-        - source
-        - currency
-        - factor
-    PagedPriceLists:
+      - id
+      - key
+      - name
+      - isStore
+    DeliveryMethodListResponse:
       type: object
       properties:
         items:
           type: array
           items:
-            $ref: '#/components/schemas/PriceList'
-        page:
-          type: integer
-        pageSize:
-          type: integer
-        total:
-          type: integer
+            $ref: '#/components/schemas/DeliveryMethod'
       required:
-        - items
-        - page
-        - pageSize
-        - total
-    AssignPriceListRequest:
+      - items
+    PaymentMethod:
       type: object
       properties:
-        priceListId:
+        id:
           type: string
           format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        requiresBank:
+          type: boolean
+        online:
+          type: boolean
+        clearingDays:
+          type: integer
       required:
-        - priceListId
-    OverridePriceListRequest:
+      - id
+      - key
+      - name
+      - requiresBank
+      - online
+      - clearingDays
+    PaymentMethodListResponse:
       type: object
       properties:
-        priceListId:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaymentMethod'
+      required:
+      - items
+    MeProfile:
+      type: object
+      properties:
+        id:
           type: string
-          format: uuid
-        currency:
+        email:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
+          format: email
+        name:
+          type:
+          - string
+          - 'null'
+        sellerCode:
+          type:
+          - string
+          - 'null'
+        roles:
+          type: array
+          items:
+            type: string
+        scopes:
+          type: array
+          items:
+            type: string
+        discountPolicy:
+          $ref: '#/components/schemas/DiscountPolicy'
+        priceListPolicy:
+          $ref: '#/components/schemas/PriceListPolicy'
       required:
-        - priceListId
-    ProjectCreateRequest:
+      - id
+      - roles
+      - scopes
+      - discountPolicy
+      - priceListPolicy
+    DiscountPolicy:
+      type: object
+      properties:
+        allowed:
+          type: boolean
+        maxPercent:
+          type: number
+          format: double
+      required:
+      - allowed
+      - maxPercent
+    PriceListPolicy:
+      type: object
+      properties:
+        default:
+          type:
+          - string
+          - 'null'
+        rollerDefault:
+          type:
+          - string
+          - 'null'
+      required:
+      - default
+      - rollerDefault
+    PriceList:
+      type: object
+      properties:
+        codLista:
+          type: string
+        desLista:
+          type:
+          - string
+          - 'null'
+        tipoLista:
+          type: string
+        tipoPrecios:
+          type:
+          - integer
+          - 'null'
+      required:
+      - codLista
+      - tipoLista
+    PagedPriceLists:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/PriceList'
+    ProjectCreate:
       type: object
       properties:
         code:
@@ -1413,20 +2660,20 @@ components:
           format: uuid
         installationAddressId:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: uuid
       required:
-        - code
-        - clientId
-        - priceListId
-    ProjectPatchRequest:
+      - code
+      - clientId
+      - priceListId
+    ProjectPatch:
       type: object
       properties:
         installationAddressId:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: uuid
     Project:
       type: object
@@ -1444,50 +2691,844 @@ components:
           format: uuid
         installationAddressId:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: uuid
         workflowState:
           $ref: '#/components/schemas/WorkflowState'
       required:
-        - id
-        - code
-        - clientId
-        - priceListId
-        - workflowState
-    ProjectQuoteCreateRequest:
+      - id
+      - code
+      - clientId
+      - priceListId
+      - workflowState
+    ProjectListItem:
       type: object
       properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        clientId:
+          type: string
+          format: uuid
+        workflowState:
+          $ref: '#/components/schemas/WorkflowState'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type:
+          - string
+          - 'null'
+          format: date-time
+      required:
+      - id
+      - code
+      - clientId
+      - workflowState
+      - createdAt
+    ClientRefBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        rut:
+          type:
+          - string
+          - 'null'
+        name:
+          type: string
+        email:
+          type:
+          - string
+          - 'null'
+          format: email
+      required:
+      - id
+      - name
+    PriceListRefBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        key:
+          type: string
+        name:
+          type: string
+        locked:
+          type: boolean
+      required:
+      - id
+      - key
+      - name
+      - locked
+    ProjectSellerBrief:
+      type: object
+      properties:
+        ejecutivoId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        sellerCode:
+          type:
+          - string
+          - 'null'
+        sellerName:
+          type:
+          - string
+          - 'null'
+        sellerEmail:
+          type:
+          - string
+          - 'null'
+          format: email
+    WorkflowSummary:
+      type: object
+      properties:
+        stage:
+          type: string
+        hasCommercialApproval:
+          type: boolean
+        hasFinancialApproval:
+          type: boolean
+      required:
+      - stage
+      - hasCommercialApproval
+      - hasFinancialApproval
+    QuoteItemVersionBrief:
+      type: object
+      properties:
+        sku:
+          type: string
+        description:
+          type:
+          - string
+          - 'null'
+        quantity:
+          type: number
+          format: double
+        unitPrice:
+          type: number
+          format: double
+        discountPercent:
+          type: number
+          format: double
+        discountAmount:
+          type: number
+          format: double
+        taxRate:
+          type: number
+          format: double
+        lineSubtotal:
+          type: number
+          format: double
+        lineDiscount:
+          type: number
+          format: double
+        lineNet:
+          type: number
+          format: double
+        optionsJson:
+          type:
+          - string
+          - 'null'
+        kind:
+          $ref: '#/components/schemas/QuoteKind'
+        source:
+          $ref: '#/components/schemas/QuoteSource'
+        notes:
+          type:
+          - string
+          - 'null'
+      required:
+      - sku
+      - quantity
+      - unitPrice
+      - discountPercent
+      - discountAmount
+      - taxRate
+      - lineSubtotal
+      - lineDiscount
+      - lineNet
+      - kind
+      - source
+    QuoteVersionBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+        state:
+          $ref: '#/components/schemas/QuoteStatus'
+        total:
+          type: integer
+          format: int64
+        issuedDate:
+          type:
+          - string
+          - 'null'
+          format: date
+        priceListKeyUsed:
+          type:
+          - string
+          - 'null'
+        supersedesVersionId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        quoteItems:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteItemVersionBrief'
+        isApproved:
+          type: boolean
+        balance:
+          type:
+          - integer
+          - 'null'
+          format: int64
+      required:
+      - id
+      - versionNumber
+      - state
+      - total
+      - quoteItems
+      - isApproved
+    QuoteBrief:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        validityDays:
+          type: integer
+        state:
+          $ref: '#/components/schemas/QuoteStatus'
+        versions:
+          type: array
+          items:
+            $ref: '#/components/schemas/QuoteVersionBrief'
+      required:
+      - id
+      - validityDays
+      - state
+      - versions
+    SalesNoteCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        number:
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - projectId
+    WorkOrderCreated:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        number:
+          type:
+          - string
+          - 'null'
+      required:
+      - id
+      - projectId
+    ProjectListRich:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        code:
+          type: string
+        state:
+          $ref: '#/components/schemas/WorkflowState'
+        deliveryMethodKey:
+          type:
+          - string
+          - 'null'
+        deliveryMethodLocked:
+          type: boolean
+        deliveryNote:
+          type:
+          - string
+          - 'null'
+        paymentMethodKey:
+          type:
+          - string
+          - 'null'
+        paymentMethodLocked:
+          type: boolean
+        paymentNote:
+          type:
+          - string
+          - 'null'
+        paymentFinancialApproval:
+          type: boolean
+        clientRef:
+          $ref: '#/components/schemas/ClientRefBrief'
+        priceListRef:
+          $ref: '#/components/schemas/PriceListRefBrief'
+        seller:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/ProjectSellerBrief'
+        salesNote:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/SalesNoteCreated'
+        quoteActual:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/QuoteBrief'
+        quoteVersionAprobadaId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        workflow:
+          $ref: '#/components/schemas/WorkflowSummary'
+        createdAt:
+          type: string
+          format: date-time
+      required:
+      - id
+      - code
+      - state
+      - deliveryMethodLocked
+      - paymentMethodLocked
+      - paymentFinancialApproval
+      - clientRef
+      - priceListRef
+      - workflow
+      - createdAt
+    PagedProjectsBasic:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProjectListItem'
+    PagedProjectsRich:
+      allOf:
+      - $ref: '#/components/schemas/PagedResult'
+      - type: object
+        properties:
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/ProjectListRich'
+    PriceAgreement:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        priceListId:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+          format: uuid
+        effectiveAt:
+          type: string
+          format: date-time
+      required:
+      - projectId
+      - priceListId
+      - quoteId
+      - effectiveAt
+    ProjectSendEmailRequest:
+      type: object
+      properties:
+        from:
+          type:
+          - string
+          - 'null'
+        to:
+          type:
+          - string
+          - 'null'
+        subject:
+          type:
+          - string
+          - 'null'
+        message:
+          type:
+          - string
+          - 'null'
+    AssignPriceListRequest:
+      type: object
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+      required:
+      - priceListId
+    OverridePriceListRequest:
+      type: object
+      properties:
+        priceListId:
+          type: string
+          format: uuid
+        currency:
+          type:
+          - string
+          - 'null'
+      required:
+      - priceListId
+    UpdateProjectDeliveryMethodRequest:
+      type: object
+      properties:
+        deliveryMethodKey:
+          type: string
+        note:
+          type:
+          - string
+          - 'null'
+      required:
+      - deliveryMethodKey
+    UpdateProjectPaymentMethodRequest:
+      type: object
+      properties:
+        paymentMethodKey:
+          type: string
+        note:
+          type:
+          - string
+          - 'null'
+      required:
+      - paymentMethodKey
+    UpdateProjectPaymentPolicyRequest:
+      type: object
+      properties:
+        paymentMethodRefId:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        paymentMethodKey:
+          type:
+          - string
+          - 'null'
+        paymentTermsDays:
+          type:
+          - integer
+          - 'null'
+        lock:
+          type:
+          - boolean
+          - 'null'
+    CreateQuoteVersionForProjectItem:
+      type: object
+      properties:
+        sku:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: number
+          format: double
+        unitPrice:
+          type: number
+          format: double
+        discountPercent:
+          type: number
+          format: double
+        discountAmount:
+          type: number
+          format: double
+        taxRate:
+          type: number
+          format: double
+        optionsJson:
+          type:
+          - string
+          - 'null'
+        kind:
+          $ref: '#/components/schemas/QuoteKind'
+        source:
+          $ref: '#/components/schemas/QuoteSource'
+        notes:
+          type:
+          - string
+          - 'null'
+      required:
+      - sku
+      - description
+      - quantity
+      - unitPrice
+      - discountPercent
+      - discountAmount
+      - taxRate
+    CreateQuoteVersionForProjectRequest:
+      type: object
+      properties:
+        issueDate:
+          type: string
+          format: date-time
+        dueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        notes:
+          type:
+          - string
+          - 'null'
         items:
           type: array
           minItems: 1
           items:
-            $ref: '#/components/schemas/QuoteItemInput'
-        discountGlobalPercent:
+            $ref: '#/components/schemas/CreateQuoteVersionForProjectItem'
+      required:
+      - issueDate
+      - items
+    CreateQuoteVersionForProjectResult:
+      type: object
+      properties:
+        quoteId:
+          type: string
+          format: uuid
+        quoteVersionId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+        currency:
+          type: string
+        subtotal:
+          type: integer
+          format: int32
+        discount:
+          type: integer
+          format: int32
+        tax:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+      required:
+      - quoteId
+      - quoteVersionId
+      - versionNumber
+      - currency
+      - subtotal
+      - discount
+      - tax
+      - total
+    CreateProjectWithQuoteProject:
+      type: object
+      properties:
+        name:
           type:
-            - number
-            - 'null'
-          format: double
-          minimum: 0
-          maximum: 100
-        discountGlobalAmount:
-          anyOf:
-            - $ref: '#/components/schemas/Money'
-            - type: 'null'
+          - string
+          - 'null'
         notes:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
+    CreateProjectWithQuoteClient:
+      type: object
+      properties:
+        id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        name:
+          type:
+          - string
+          - 'null'
+        nomAux:
+          type:
+          - string
+          - 'null'
+        taxId:
+          type:
+          - string
+          - 'null'
+        rut:
+          type:
+          - string
+          - 'null'
+        rutAux:
+          type:
+          - string
+          - 'null'
+        externalId:
+          type:
+          - string
+          - 'null'
+        codAux:
+          type:
+          - string
+          - 'null'
+        eMail:
+          type:
+          - string
+          - 'null'
+          format: email
+        fonAux1:
+          type:
+          - string
+          - 'null'
+    CreateProjectWithQuotePriceList:
+      type: object
+      properties:
+        id:
+          type:
+          - string
+          - 'null'
+          format: uuid
+        code:
+          type:
+          - string
+          - 'null'
+        codLista:
+          type:
+          - string
+          - 'null'
+        name:
+          type:
+          - string
+          - 'null'
+        desLista:
+          type:
+          - string
+          - 'null'
+        currency:
+          type:
+          - string
+          - 'null'
+        factor:
+          type:
+          - number
+          - 'null'
+          format: double
+        active:
+          type:
+          - boolean
+          - 'null'
+    CreateProjectWithQuoteItem:
+      type: object
+      properties:
+        sku:
+          type: string
+        description:
+          type: string
+        quantity:
+          type: number
+          format: double
+        unitPrice:
+          type: number
+          format: double
+        discountPercent:
+          type: number
+          format: double
+        discountAmount:
+          type: number
+          format: double
+        taxRate:
+          type: number
+          format: double
+        optionsJson:
+          type:
+          - string
+          - 'null'
+        kind:
+          $ref: '#/components/schemas/QuoteKind'
+        source:
+          $ref: '#/components/schemas/QuoteSource'
+        notes:
+          type:
+          - string
+          - 'null'
       required:
-        - items
+      - sku
+      - description
+      - quantity
+      - unitPrice
+      - discountPercent
+      - discountAmount
+      - taxRate
+    CreateProjectWithQuoteQuoteDraft:
+      type: object
+      properties:
+        issueDate:
+          type: string
+          format: date-time
+        dueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        notes:
+          type:
+          - string
+          - 'null'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CreateProjectWithQuoteItem'
+      required:
+      - issueDate
+      - items
+    CreateProjectWithQuoteRequest:
+      type: object
+      properties:
+        project:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/CreateProjectWithQuoteProject'
+        client:
+          $ref: '#/components/schemas/CreateProjectWithQuoteClient'
+        customer:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/CreateProjectWithQuoteClient'
+        priceList:
+          $ref: '#/components/schemas/CreateProjectWithQuotePriceList'
+        quote:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/CreateProjectWithQuoteQuoteDraft'
+        items:
+          type:
+          - array
+          - 'null'
+          items:
+            $ref: '#/components/schemas/CreateProjectWithQuoteItem'
+        issueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        dueDate:
+          type:
+          - string
+          - 'null'
+          format: date-time
+        notes:
+          type:
+          - string
+          - 'null'
+      required:
+      - client
+      - priceList
+    CreateProjectWithQuoteResult:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        quoteId:
+          type: string
+          format: uuid
+        quoteVersionId:
+          type: string
+          format: uuid
+        versionNumber:
+          type: integer
+        currency:
+          type: string
+        subtotal:
+          type: integer
+          format: int32
+        discount:
+          type: integer
+          format: int32
+        tax:
+          type: integer
+          format: int32
+        total:
+          type: integer
+          format: int32
+      required:
+      - projectId
+      - quoteId
+      - quoteVersionId
+      - versionNumber
+      - currency
+      - subtotal
+      - discount
+      - tax
+      - total
+    QuoteItemInput:
+      type: object
+      properties:
+        productId:
+          type: string
+          format: uuid
+        qty:
+          type: number
+          format: double
+        unitPrice:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/MoneyAmount'
+        discountPercent:
+          type:
+          - number
+          - 'null'
+          format: double
+        discountAmount:
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/MoneyAmount'
+        notes:
+          type:
+          - string
+          - 'null'
+      required:
+      - productId
+      - qty
     ProjectWithQuoteCreateRequest:
       type: object
       properties:
         projectCode:
           type:
-            - string
-            - 'null'
-          description: Código opcional; si se omite se genera automáticamente.
+          - string
+          - 'null'
         clientId:
           type: string
           format: uuid
@@ -1501,23 +3542,25 @@ components:
             $ref: '#/components/schemas/QuoteItemInput'
         discountGlobalPercent:
           type:
-            - number
-            - 'null'
+          - number
+          - 'null'
           format: double
           minimum: 0
           maximum: 100
         discountGlobalAmount:
-          anyOf:
-            - $ref: '#/components/schemas/Money'
-            - type: 'null'
+          type:
+          - object
+          - 'null'
+          allOf:
+          - $ref: '#/components/schemas/MoneyAmount'
         notes:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - clientId
-        - priceListId
-        - items
+      - clientId
+      - priceListId
+      - items
     ProjectWithQuote:
       type: object
       properties:
@@ -1526,57 +3569,19 @@ components:
         quote:
           $ref: '#/components/schemas/Quote'
       required:
-        - project
-        - quote
-    QuoteItemInput:
+      - project
+      - quote
+    MoneyAmount:
       type: object
       properties:
-        productId:
+        currency:
           type: string
-          format: uuid
-        qty:
-          type: number
-          format: double
-          minimum: 0.000001
-        unitPrice:
-          anyOf:
-            - $ref: '#/components/schemas/Money'
-            - type: 'null'
-        discountPercent:
-          type:
-            - number
-            - 'null'
-          format: double
-          minimum: 0
-          maximum: 100
-        discountAmount:
-          anyOf:
-            - $ref: '#/components/schemas/Money'
-            - type: 'null'
-        notes:
-          type:
-            - string
-            - 'null'
+        amount:
+          type: integer
+          format: int64
       required:
-        - productId
-        - qty
-    QuoteCreateRequest:
-      type: object
-      properties:
-        projectId:
-          type: string
-          format: uuid
-        items:
-          type: array
-          items:
-            $ref: '#/components/schemas/QuoteItemInput'
-        notes:
-          type:
-            - string
-            - 'null'
-      required:
-        - projectId
-        - items
+      - currency
+      - amount
     QuoteItem:
       type: object
       properties:
@@ -1587,20 +3592,21 @@ components:
           type: number
           format: double
         unitPrice:
-          $ref: '#/components/schemas/Money'
-        discountPercent:
+          $ref: '#/components/schemas/MoneyAmount'
+        discountPct:
           type: number
           format: double
         discountAmount:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
         lineTotal:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
       required:
-        - productId
-        - quantity
-        - unitPrice
-        - discountPercent
-        - lineTotal
+      - productId
+      - quantity
+      - unitPrice
+      - discountPct
+      - discountAmount
+      - lineTotal
     Quote:
       type: object
       properties:
@@ -1613,77 +3619,56 @@ components:
         version:
           type: integer
         status:
-          type: string
-          enum:
-            - draft
-            - submitted
-            - sent
-            - approved
-            - rejected
+          $ref: '#/components/schemas/QuoteStatus'
         items:
           type: array
           items:
             $ref: '#/components/schemas/QuoteItem'
         subtotal:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
         discounts:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
         taxes:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
         total:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/MoneyAmount'
         createdAt:
           type: string
           format: date-time
         updatedAt:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: date-time
       required:
-        - id
-        - projectId
-        - version
-        - status
-        - items
-        - subtotal
-        - discounts
-        - taxes
-        - total
-        - createdAt
-    QuoteItemCreate:
+      - id
+      - projectId
+      - version
+      - status
+      - items
+      - subtotal
+      - discounts
+      - taxes
+      - total
+      - createdAt
+    QuoteCreateRequest:
       type: object
       properties:
-        sku:
+        projectId:
           type: string
-        quantity:
-          type: number
-          format: double
-          minimum: 0.000001
-        unitPrice:
-          type:
-            - number
-            - 'null'
-          format: double
-        discountPercent:
-          type:
-            - number
-            - 'null'
-          format: double
-          minimum: 0
-          maximum: 100
-        discountAmount:
-          type:
-            - number
-            - 'null'
-          format: double
+          format: uuid
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/QuoteItemInput'
         notes:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - sku
-        - quantity
+      - projectId
+      - items
     QuoteVersionSummary:
       type: object
       properties:
@@ -1704,6 +3689,13 @@ components:
         total:
           type: number
           format: double
+      required:
+      - versionId
+      - itemsCount
+      - subtotal
+      - discount
+      - tax
+      - total
     QuoteDiscountPatchItem:
       type: object
       properties:
@@ -1719,10 +3711,10 @@ components:
           format: double
           minimum: 0
       required:
-        - sku
-        - discountPercent
-        - discountAmount
-    QuoteDiscountsPatch:
+      - sku
+      - discountPercent
+      - discountAmount
+    QuoteDiscountPatch:
       type: object
       properties:
         items:
@@ -1731,14 +3723,40 @@ components:
           items:
             $ref: '#/components/schemas/QuoteDiscountPatchItem'
       required:
-        - items
+      - items
+    QuoteItemCreate:
+      type: object
+      properties:
+        sku:
+          type: string
+        quantity:
+          type: number
+          format: double
+          minimum: 1.0e-06
+        unitPrice:
+          type:
+          - number
+          - 'null'
+          format: double
+        discountPercent:
+          type:
+          - number
+          - 'null'
+          format: double
+          minimum: 0
+          maximum: 100
+        discountAmount:
+          type:
+          - number
+          - 'null'
+          format: double
+        notes:
+          type:
+          - string
+          - 'null'
       required:
-        - versionId
-        - itemsCount
-        - subtotal
-        - discount
-        - tax
-        - total
+      - sku
+      - quantity
     Approval:
       type: object
       properties:
@@ -1751,74 +3769,72 @@ components:
         step:
           type: string
           enum:
-            - commercial_1
-            - financial_1
+          - commercial_1
+          - financial_1
         status:
           type: string
           enum:
-            - pending
-            - approved
-            - rejected
+          - pending
+          - approved
+          - rejected
         decidedBy:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: uuid
         decidedAt:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
           format: date-time
         comments:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - id
-        - quoteId
-        - step
-        - status
+      - id
+      - quoteId
+      - step
+      - status
     ApprovalRequest:
       type: object
       properties:
         decision:
           type: string
           enum:
-            - approved
-            - rejected
+          - approved
+          - rejected
         comment:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - decision
+      - decision
     ApprovalDecision:
       type: object
       properties:
         decision:
           type: string
           enum:
-            - approved
-            - rejected
+          - approved
+          - rejected
         comment:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - decision
-    WorkflowState:
-      type: string
-      enum:
-        - draft
-        - quoted
-        - approval_pending
-        - approved
-        - sales_note_issued
-        - work_order_issued
-        - manufacturing
-        - delivered
-        - installed
-        - closed
+      - decision
+    SubmitProjectForApprovalResult:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        state:
+          type: string
+      required:
+      - projectId
+      - state
     WorkflowTransitionRequest:
       type: object
       properties:
@@ -1826,183 +3842,276 @@ components:
           $ref: '#/components/schemas/WorkflowState'
         comment:
           type:
-            - string
-            - 'null'
+          - string
+          - 'null'
       required:
-        - targetState
-    PriceAgreement:
+      - targetState
+    QuoteStatus:
+      type: string
+      enum:
+      - draft
+      - submitted
+      - sent
+      - approved
+      - rejected
+    QuoteKind:
+      type: string
+      enum:
+      - product
+      - service
+      - custom
+    QuoteSource:
+      type: string
+      enum:
+      - erp
+      - custom
+    WorkflowState:
+      type: string
+      enum:
+      - draft
+      - quoted
+      - approval_pending
+      - approved
+      - sales_note_issued
+      - work_order_issued
+      - manufacturing
+      - delivered
+      - installed
+      - closed
+      - canceled
+    AuthDebugClaim:
       type: object
       properties:
-        projectId:
+        type:
           type: string
-          format: uuid
-        priceListId:
+        value:
+          type: string
+      required:
+      - type
+      - value
+    AuthDebugWhoAmIResponse:
+      type: object
+      properties:
+        isAuthenticated:
+          type: boolean
+        authenticationType:
+          type:
+          - string
+          - 'null'
+        name:
+          type:
+          - string
+          - 'null'
+        claims:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuthDebugClaim'
+      required:
+      - isAuthenticated
+      - claims
+    ErrorCode:
+      type: string
+      enum:
+      - validation.required_field
+      - validation.out_of_range
+      - validation.enum_value_invalid
+      - workflow.invalid_transition
+      - workflow.state_conflict
+      - pricing.lock_required
+      - pricing.list_mismatch
+      - pricing.freeze_required
+      - conflict.version_conflict
+      - conflict.idempotency_replayed
+      - erp.unavailable
+      - erp.timeout
+      - rate_limit.exceeded
+    QuoteVersion:
+      type: object
+      description: Versión inmutable de cotización (snapshot de cálculo).
+      properties:
+        id:
           type: string
           format: uuid
         quoteId:
           type: string
           format: uuid
-        effectiveAt:
+        number:
+          type: integer
+          minimum: 1
+        state:
+          type: string
+          description: Estado de workflow en el momento del snapshot
+        createdAt:
           type: string
           format: date-time
+        priceAgreementId:
+          type: string
+          format: uuid
+          nullable: true
       required:
-        - projectId
-        - priceListId
-        - quoteId
-        - effectiveAt
-    SalesNote:
+      - id
+      - quoteId
+      - number
+      - createdAt
+    WorkflowEvent:
       type: object
+      description: Evento de dominio que narra cambios relevantes en el flujo.
       properties:
         id:
           type: string
           format: uuid
-        projectId:
+        aggregateType:
           type: string
-          format: uuid
-        number:
-          type:
-            - string
-            - 'null'
-      required:
-        - id
-        - projectId
-    WorkOrder:
-      type: object
-      properties:
-        id:
+          enum:
+          - Project
+          - Quote
+          - QuoteVersion
+          - WorkOrder
+          - SalesNote
+        aggregateId:
           type: string
-          format: uuid
-        projectId:
+        type:
           type: string
-          format: uuid
-        number:
-          type:
-            - string
-            - 'null'
-      required:
-        - id
-        - projectId
-    MeProfile:
-      type: object
-      properties:
-        id:
+          description: e.g., quote.submitted, quote.approved_f
+        occurredAt:
           type: string
-        email:
-          type:
-            - string
-            - 'null'
-          format: email
-        name:
-          type:
-            - string
-            - 'null'
-        roles:
+          format: date-time
+        actor:
           type: string
-        scopes:
-          type: array
-          items:
-            type: string
-        discountPolicy:
+          description: Usuario o sistema que ejecuta la acción
+        payload:
           type: object
-          properties:
-            allowed:
-              type: boolean
-            maxPercent:
-              type: number
-              format: double
-          required:
-            - allowed
-            - maxPercent
-        pricelistPolicy:
-          type: object
-          properties:
-            default:
-              type:
-                - string
-                - 'null'
-            rollerDefault:
-              type:
-                - string
-                - 'null'
-          required:
-            - default
-            - rollerDefault
+          additionalProperties: true
       required:
-        - id
-        - roles
-        - scopes
-        - discountPolicy
-        - pricelistPolicy
-  responses:
-    Problem:
-      description: Error
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    NotFound:
-      description: No encontrado
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    BadRequest:
-      description: Solicitud inválida
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    Unauthorized:
-      description: No autenticado
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    Forbidden:
-      description: Prohibido (RBAC)
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    Conflict:
-      description: Conflicto / Regla de negocio
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
-    UnprocessableEntity:
-      description: Error semántico
-      content:
-        application/json:
-          schema:
-            $ref: '#/components/schemas/ProblemDetails'
+      - id
+      - aggregateType
+      - aggregateId
+      - type
+      - occurredAt
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
-tags:
-  - name: Clients
-    description: Endpoints para búsqueda y detalle de clientes.
-  - name: Catalog
-    description: 'Endpoints de catálogo de productos (SKU, descripción, UoM) para cotizar.'
-  - name: PriceLists
-    description: Gestión y consulta de listas de precio y su vigencia.
-  - name: Projects
-    description: Alta y consulta de proyectos con PriceList bloqueado (LOCK) y estado actual.
-  - name: Quotes
-    description: Creación y lectura de cotizaciones y sus versiones.
-  - name: Approvals
-    description: Flujo de aprobaciones comercial y financiera (1C + 1F) sobre cotizaciones.
-  - name: Workflow
-    description: Transiciones y guardias del workflow del proyecto.
-  - name: SalesNotes
-    description: Emisión y consulta de Notas de Venta (NV) derivadas de proyectos aprobados.
-  - name: WorkOrders
-    description: Emisión y consulta de Órdenes de Trabajo (OT) posteriores a NV.
-  - name: Users
-    description: Gestion de usuarios Sispro.
-  - name: Identity
-    description: Información del usuario autenticado.
 security:
-  - bearerAuth: []
+- bearerAuth: []
+tags:
+- name: Clients
+  description: Endpoints para busqueda y detalle de clientes.
+- name: Catalog
+  description: Endpoints de catalogo (geografia, productos, metodos) para cotizar.
+- name: PriceLists
+  description: Gestion y consulta de listas de precio y su vigencia.
+- name: Projects
+  description: Alta y gestion de proyectos con PriceList bloqueado y estado actual.
+- name: Quotes
+  description: Creacion y gestion de cotizaciones y sus versiones.
+- name: Approvals
+  description: Flujo de aprobaciones comercial y financiera sobre cotizaciones.
+- name: Workflow
+  description: Transiciones y guardias del workflow del proyecto.
+- name: SalesNotes
+  description: Emision y consulta de Notas de Venta derivadas de proyectos aprobados.
+- name: WorkOrders
+  description: Emision y consulta de Ordenes de Trabajo posteriores a NV.
+- name: Users
+  description: Gestion de usuarios Sispro.
+- name: Identity
+  description: Informacion del usuario autenticado y diagnostico.
+x-versioning-policy:
+  semver:
+    major: Cambios incompatibles (renombrar recursos/campos, cambiar significado,
+      eliminar). Requiere plan de migración y ventana.
+    minor: Agregar recursos/campos/valores enum de forma retro-compatible. Permitido
+      sin romper.
+    patch: Correcciones de documentación o bugs que no tocan modelos ni contratos.
+  release_train: Semanal o quincenal.
+x-deprecation-policy:
+  min_window_days: 90
+  communication:
+  - Changelog humano
+  - Header Deprecation/Warning
+  - Aviso a consumidores internos
+x-docs:
+  workflow_markdown: '## Workflow (Estados y Transiciones)
+
+
+    | Estado | Entrada (quién/cómo) | Salidas válidas | Efectos/Side-effects | Evento
+    emitido |
+
+    |---|---|---|---|---|
+
+    | draft | create(Project/Quote) | submitted | — | project.created / quote.created
+    |
+
+    | submitted | submit(Commercial) | approved_commercial, rejected_commercial |
+    Lock lista de precios (soft) | quote.submitted |
+
+    | approved_commercial | approve(Commercial) | approved_financial | Freeze parcial
+    (reglas internas) | quote.approved_c |
+
+    | approved_financial | approve(Financial) | frozen | **FREEZE precios** (PriceAgreement)
+    | quote.approved_f |
+
+    | frozen | generate(NV) | work_order | Emite documento de venta / NV | doc.generated
+    |
+
+    | work_order | create(Operaciones) | delivered, canceled | Crea OT; avanza fulfillment
+    | wo.created |
+
+
+    > Ajusta los estados a tu flujo real. Esta tabla es **normativa** para la SPA
+    y la API.
+
+    '
+  consistency_degradation: "## Consistencia, Caché y Modo Degradado\n\n- **Consistencia**:\
+    \ fuerte para mutaciones (con `If-Match`); eventual para lecturas dependientes\
+    \ de ERP.\n- **TTL**: 15 minutos para caché de pricing/catálogo. Nueva versión\
+    \ de cotización invalida caché previo.\n- **Modo degradado (ERP no disponible)**:\n\
+    \  - Se bloquea *repricing* y creación de *QuoteVersion*.\n  - Lecturas usan último\
+    \ snapshot disponible.\n  - Error `erp.unavailable` con `canRetry: true` y `retryAfter`\
+    \ sugerido.\n"
+  pagination_sorting: '## Paginación, Filtros y Orden
+
+
+    - **Paginación**: offset/limit. `pageSize` por defecto 20, máximo 100.
+
+    - **Filtros**: documentar por recurso (`status`, `priceListId`, `createdAtFrom/To`,
+    etc.).
+
+    - **Orden**: `sort` = lista de campos permitidos; `-campo` para descendente.
+
+    '
+  error_taxonomy: '## Taxonomía de Errores
+
+
+    - **Validación**: `validation.required_field`, `validation.out_of_range`, `validation.enum_value_invalid`
+
+    - **Flujo/Estado**: `workflow.invalid_transition`, `workflow.state_conflict`
+
+    - **Precios/Locks**: `pricing.lock_required`, `pricing.list_mismatch`, `pricing.freeze_required`
+
+    - **Concurrencia**: `conflict.version_conflict` (ETag/xmin mismatch), `conflict.idempotency_replayed`
+
+    - **Integración**: `erp.unavailable`, `erp.timeout`
+
+
+    Cada error incluye: `code`, `message`, `hint`, `canRetry`, `retryAfter` (opcional).
+
+    '
+  glossary: '## Glosario
+
+
+    - **LOCK**: fijar la lista de precios de referencia del proyecto/cotización.
+
+    - **FREEZE**: congelar importes acordados (PriceAgreement) tras aprobación financiera.
+
+    - **NV**: Nota de Venta / documento comercial.
+
+    - **OT**: Orden de Trabajo / ejecución operativa.
+
+    - **QuoteVersion**: snapshot inmutable de cálculo por versión.
+
+    - **WorkflowEvent**: evento de dominio que narra una transición/acción relevante.
+
+    '
