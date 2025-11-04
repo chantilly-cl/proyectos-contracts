@@ -131,6 +131,7 @@ paths:
       - Quotes
       parameters:
       - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
@@ -169,6 +170,7 @@ paths:
       - Projects
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
@@ -235,6 +237,7 @@ paths:
       - Workflow
       parameters:
       - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
@@ -388,6 +391,7 @@ paths:
       - Approvals
       parameters:
       - $ref: '#/components/parameters/ApprovalId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
@@ -427,7 +431,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/ProjectId'
       - $ref: '#/components/parameters/IdempotencyKeyRequired'
-      - $ref: '#/components/parameters/Idempotency-Key'
       responses:
         '201':
           description: Creada
@@ -458,7 +461,6 @@ paths:
       parameters:
       - $ref: '#/components/parameters/ProjectId'
       - $ref: '#/components/parameters/IdempotencyKeyRequired'
-      - $ref: '#/components/parameters/Idempotency-Key'
       responses:
         '201':
           description: Creada
@@ -487,6 +489,7 @@ paths:
       tags:
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
@@ -586,6 +589,7 @@ paths:
       tags:
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/QuoteId'
       - $ref: '#/components/parameters/Idempotency-Key'
       responses:
@@ -616,6 +620,7 @@ paths:
       tags:
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/QuoteId'
       - $ref: '#/components/parameters/Idempotency-Key'
       responses:
@@ -673,6 +678,7 @@ paths:
       tags:
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/QuoteId'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
@@ -711,6 +717,7 @@ paths:
       tags:
       - Quotes
       parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/QuoteId'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
@@ -1493,6 +1500,7 @@ paths:
       - Projects
       parameters:
       - $ref: '#/components/parameters/ProjectId'
+      - $ref: '#/components/parameters/IdempotencyKey'
       - $ref: '#/components/parameters/Idempotency-Key'
       requestBody:
         required: true
